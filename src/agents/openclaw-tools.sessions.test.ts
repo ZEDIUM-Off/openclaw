@@ -190,9 +190,9 @@ describe("sessions tools", () => {
         method?: string;
         params?: Record<string, unknown>;
       };
-      if (request.method === "sessions.resolve") {
+      if (request.method === "sessions.find") {
         return {
-          key: targetKey,
+          matches: [{ key: targetKey }],
         };
       }
       if (request.method === "chat.history") {
@@ -226,7 +226,7 @@ describe("sessions tools", () => {
     const sessionId = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
     callGatewayMock.mockImplementation(async (opts: unknown) => {
       const request = opts as { method?: string };
-      if (request.method === "sessions.resolve") {
+      if (request.method === "sessions.find") {
         throw new Error("No session found");
       }
       return {};
@@ -396,8 +396,8 @@ describe("sessions tools", () => {
         method?: string;
         params?: Record<string, unknown>;
       };
-      if (request.method === "sessions.resolve") {
-        return { key: targetKey };
+      if (request.method === "sessions.find") {
+        return { matches: [{ key: targetKey }] };
       }
       if (request.method === "agent") {
         return { runId: "run-1", acceptedAt: 123 };

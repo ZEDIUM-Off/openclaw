@@ -23,6 +23,7 @@ export function registerAgentCommands(program: Command, args: { agentChannelOpti
     .description("Run an agent turn via the Gateway (use --local for embedded)")
     .requiredOption("-m, --message <text>", "Message body for the agent")
     .option("-t, --to <number>", "Recipient number in E.164 used to derive the session key")
+    .option("--session <ref>", "Use a session ref (key, sessionId, or label)")
     .option("--session-id <id>", "Use an explicit session id")
     .option("--agent <id>", "Agent id (overrides routing bindings)")
     .option("--thinking <level>", "Thinking level: off | minimal | low | medium | high")
@@ -57,6 +58,7 @@ ${formatHelpExamples([
     'openclaw agent --session-id 1234 --message "Summarize inbox" --thinking medium',
     "Target a session with explicit thinking level.",
   ],
+  ['openclaw agent --session "triage" --message "Continue triage"', "Target a session by label."],
   [
     'openclaw agent --to +15555550123 --message "Trace logs" --verbose on --json',
     "Enable verbose logging and JSON output.",

@@ -37,6 +37,7 @@ import { createSubsystemLogger, runtimeForLogger } from "../logging/subsystem.js
 import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { startGatewayConfigReloader } from "./config-reload.js";
 import { ExecApprovalManager } from "./exec-approval-manager.js";
+import { startKgmSessionTranscriptIngestor } from "./kgm/session-transcripts.js";
 import { NodeRegistry } from "./node-registry.js";
 import { createChannelManager } from "./server-channels.js";
 import { createAgentEventHandler } from "./server-chat.js";
@@ -306,6 +307,10 @@ export async function startGatewayServer(
     log,
     logHooks,
     logPlugins,
+  });
+  const stopKgmTranscriptIngest = startKgmSessionTranscriptIngestor({
+    cfg: cfgAtStart,
+    log,
   });
   let bonjourStop: (() => Promise<void>) | null = null;
   const nodeRegistry = new NodeRegistry();
@@ -583,6 +588,7 @@ export async function startGatewayServer(
         clearTimeout(skillsRefreshTimer);
         skillsRefreshTimer = null;
       }
+      stopKgmTranscriptIngest();
       skillsChangeUnsub();
       await close(opts);
     },

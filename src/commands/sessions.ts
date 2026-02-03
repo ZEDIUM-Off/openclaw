@@ -1,15 +1,21 @@
+import type { SessionsListResult } from "../gateway/session-utils.types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { lookupContextTokens } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_MODEL, DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { resolveConfiguredModelRef } from "../agents/model-selection.js";
 import { loadConfig } from "../config/config.js";
 import { loadSessionStore, resolveStorePath, type SessionEntry } from "../config/sessions.js";
+import { callGateway } from "../gateway/call.js";
 import { info } from "../globals.js";
+import { normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import { isRich, theme } from "../terminal/theme.js";
 
 type SessionRow = {
   key: string;
   kind: "direct" | "group" | "global" | "unknown";
+  label?: string;
+  displayName?: string;
+  subject?: string;
   updatedAt: number | null;
   ageMs: number | null;
   sessionId?: string;
@@ -26,6 +32,7 @@ type SessionRow = {
   totalTokens?: number;
   model?: string;
   contextTokens?: number;
+  pinnedAt?: number | null;
 };
 
 const KIND_PAD = 6;
@@ -102,6 +109,7 @@ const formatModelCell = (model: string | null | undefined, rich: boolean) => {
 
 const formatFlagsCell = (row: SessionRow, rich: boolean) => {
   const flags = [
+    row.pinnedAt ? "pinned" : null,
     row.thinkingLevel ? `think:${row.thinkingLevel}` : null,
     row.verboseLevel ? `verbose:${row.verboseLevel}` : null,
     row.reasoningLevel ? `reasoning:${row.reasoningLevel}` : null,
@@ -158,6 +166,9 @@ function toRows(store: Record<string, SessionEntry>): SessionRow[] {
       return {
         key,
         kind: classifyKey(key, entry),
+        label: entry?.label,
+        displayName: entry?.displayName,
+        subject: entry?.subject,
         updatedAt,
         ageMs: updatedAt ? Date.now() - updatedAt : null,
         sessionId: entry?.sessionId,
@@ -174,13 +185,53 @@ function toRows(store: Record<string, SessionEntry>): SessionRow[] {
         totalTokens: entry?.totalTokens,
         model: entry?.model,
         contextTokens: entry?.contextTokens,
+        pinnedAt: entry?.pinnedAt ?? null,
+      } satisfies SessionRow;
+    })
+    .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+}
+
+function toRowsFromGateway(result: SessionsListResult): SessionRow[] {
+  return result.sessions
+    .map((entry) => {
+      const updatedAt = entry.updatedAt ?? null;
+      return {
+        key: entry.key,
+        kind: entry.kind,
+        updatedAt,
+        ageMs: updatedAt ? Date.now() - updatedAt : null,
+        sessionId: entry.sessionId,
+        systemSent: entry.systemSent,
+        abortedLastRun: entry.abortedLastRun,
+        thinkingLevel: entry.thinkingLevel,
+        verboseLevel: entry.verboseLevel,
+        reasoningLevel: entry.reasoningLevel,
+        elevatedLevel: entry.elevatedLevel,
+        responseUsage: entry.responseUsage,
+        groupActivation: entry.groupActivation,
+        inputTokens: entry.inputTokens,
+        outputTokens: entry.outputTokens,
+        totalTokens: entry.totalTokens,
+        model: entry.model,
+        contextTokens: entry.contextTokens,
+        pinnedAt: entry.pinnedAt ?? null,
       } satisfies SessionRow;
     })
     .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
 export async function sessionsCommand(
-  opts: { json?: boolean; store?: string; active?: string },
+  opts: {
+    json?: boolean;
+    store?: string;
+    active?: string;
+    agent?: string;
+    search?: string;
+    pinned?: boolean;
+    pin?: string;
+    unpin?: string;
+    sort?: string;
+  },
   runtime: RuntimeEnv,
 ) {
   const cfg = loadConfig();
@@ -195,7 +246,36 @@ export async function sessionsCommand(
     DEFAULT_CONTEXT_TOKENS;
   const configModel = resolved.model ?? DEFAULT_MODEL;
   const storePath = resolveStorePath(opts.store ?? cfg.session?.store);
-  const store = loadSessionStore(storePath);
+
+  const parseKeyList = (value?: string) =>
+    (value ?? "")
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+  const pinKeys = parseKeyList(opts.pin);
+  const unpinKeys = parseKeyList(opts.unpin);
+
+  if (pinKeys.length > 0 || unpinKeys.length > 0) {
+    const toPatch = [
+      ...pinKeys.map((key) => ({ key, pin: true })),
+      ...unpinKeys.map((key) => ({ key, pin: false })),
+    ];
+    for (const patch of toPatch) {
+      try {
+        await callGateway({
+          method: "sessions.patch",
+          params: patch,
+          timeoutMs: 10_000,
+        });
+      } catch (err) {
+        runtime.error(`Failed to update session pin: ${patch.key}`);
+        runtime.error(String(err));
+        runtime.exit(1);
+        return;
+      }
+    }
+  }
 
   let activeMinutes: number | undefined;
   if (opts.active !== undefined) {
@@ -208,15 +288,76 @@ export async function sessionsCommand(
     activeMinutes = parsed;
   }
 
-  const rows = toRows(store).filter((row) => {
-    if (activeMinutes === undefined) {
-      return true;
+  let rows: SessionRow[] | null = null;
+  try {
+    const result = await callGateway<SessionsListResult>({
+      method: "sessions.list",
+      params: {
+        activeMinutes,
+        agentId: opts.agent,
+        search: opts.search,
+        pinnedOnly: Boolean(opts.pinned),
+        sort: opts.sort === "pinned" ? "pinned" : undefined,
+      },
+      timeoutMs: 10_000,
+    });
+    rows = toRowsFromGateway(result);
+  } catch {
+    rows = null;
+  }
+
+  if (!rows) {
+    const store = loadSessionStore(storePath);
+    rows = toRows(store)
+      .filter((row) => {
+        if (!opts.agent) {
+          return true;
+        }
+        if (row.key === "global" || row.key === "unknown") {
+          return false;
+        }
+        const parsed = parseAgentSessionKey(row.key);
+        if (!parsed) {
+          return false;
+        }
+        return normalizeAgentId(parsed.agentId) === normalizeAgentId(opts.agent);
+      })
+      .filter((row) => {
+        const query = opts.search?.trim().toLowerCase();
+        if (!query) {
+          return true;
+        }
+        const fields = [row.displayName, row.label, row.subject, row.key];
+        return fields.some((field) =>
+          typeof field === "string" ? field.toLowerCase().includes(query) : false,
+        );
+      })
+      .filter((row) => {
+        if (activeMinutes === undefined) {
+          return true;
+        }
+        if (!row.updatedAt) {
+          return false;
+        }
+        return Date.now() - row.updatedAt <= activeMinutes * 60_000;
+      })
+      .filter((row) => {
+        if (!opts.pinned) {
+          return true;
+        }
+        return Boolean(row.pinnedAt);
+      });
+    if (opts.sort === "pinned") {
+      rows = rows.toSorted((a, b) => {
+        const aPinned = a.pinnedAt ?? 0;
+        const bPinned = b.pinnedAt ?? 0;
+        if (aPinned !== bPinned) {
+          return bPinned - aPinned;
+        }
+        return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+      });
     }
-    if (!row.updatedAt) {
-      return false;
-    }
-    return Date.now() - row.updatedAt <= activeMinutes * 60_000;
-  });
+  }
 
   if (opts.json) {
     runtime.log(

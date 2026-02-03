@@ -35,6 +35,7 @@ export type AgentCommandOpts = {
   /** Agent id override (must exist in config). */
   agentId?: string;
   to?: string;
+  session?: string;
   sessionId?: string;
   sessionKey?: string;
   thinking?: string;

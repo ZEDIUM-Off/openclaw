@@ -20,6 +20,7 @@ import {
 } from "../../infra/restart-sentinel.js";
 import { scheduleGatewaySigusr1Restart } from "../../infra/restart.js";
 import { loadOpenClawPlugins } from "../../plugins/loader.js";
+import { recordConfigSnapshot } from "../kgm/config-snapshots.js";
 import {
   ErrorCodes,
   errorShape,
@@ -100,9 +101,16 @@ export const configHandlers: GatewayRequestHandlers = {
       return;
     }
     const snapshot = await readConfigFileSnapshot();
+    if (typeof snapshot.raw === "string") {
+      void recordConfigSnapshot({
+        cfg: snapshot.config,
+        raw: snapshot.raw,
+        reason: "config.get",
+      });
+    }
     respond(true, snapshot, undefined);
   },
-  "config.schema": ({ params, respond }) => {
+  "config.schema": async ({ params, respond }) => {
     if (!validateConfigSchemaParams(params)) {
       respond(
         false,
@@ -115,6 +123,14 @@ export const configHandlers: GatewayRequestHandlers = {
       return;
     }
     const cfg = loadConfig();
+    const snapshot = await readConfigFileSnapshot();
+    if (typeof snapshot.raw === "string") {
+      void recordConfigSnapshot({
+        cfg: snapshot.config,
+        raw: snapshot.raw,
+        reason: "config.schema",
+      });
+    }
     const workspaceDir = resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
     const pluginRegistry = loadOpenClawPlugins({
       config: cfg,
@@ -186,6 +202,11 @@ export const configHandlers: GatewayRequestHandlers = {
       return;
     }
     await writeConfigFile(validated.config);
+    void recordConfigSnapshot({
+      cfg: validated.config,
+      raw: rawValue,
+      reason: "config.set",
+    });
     respond(
       true,
       {
@@ -263,8 +284,6 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    await writeConfigFile(validated.config);
-
     const sessionKey =
       typeof (params as { sessionKey?: unknown }).sessionKey === "string"
         ? (params as { sessionKey?: string }).sessionKey?.trim() || undefined
@@ -273,6 +292,14 @@ export const configHandlers: GatewayRequestHandlers = {
       typeof (params as { note?: unknown }).note === "string"
         ? (params as { note?: string }).note?.trim() || undefined
         : undefined;
+    await writeConfigFile(validated.config);
+    void recordConfigSnapshot({
+      cfg: validated.config,
+      raw: rawValue,
+      reason: "config.patch",
+      sessionKey,
+      note,
+    });
     const restartDelayMsRaw = (params as { restartDelayMs?: unknown }).restartDelayMs;
     const restartDelayMs =
       typeof restartDelayMsRaw === "number" && Number.isFinite(restartDelayMsRaw)
@@ -360,8 +387,6 @@ export const configHandlers: GatewayRequestHandlers = {
       );
       return;
     }
-    await writeConfigFile(validated.config);
-
     const sessionKey =
       typeof (params as { sessionKey?: unknown }).sessionKey === "string"
         ? (params as { sessionKey?: string }).sessionKey?.trim() || undefined
@@ -370,6 +395,14 @@ export const configHandlers: GatewayRequestHandlers = {
       typeof (params as { note?: unknown }).note === "string"
         ? (params as { note?: string }).note?.trim() || undefined
         : undefined;
+    await writeConfigFile(validated.config);
+    void recordConfigSnapshot({
+      cfg: validated.config,
+      raw: rawValue,
+      reason: "config.apply",
+      sessionKey,
+      note,
+    });
     const restartDelayMsRaw = (params as { restartDelayMs?: unknown }).restartDelayMs;
     const restartDelayMs =
       typeof restartDelayMsRaw === "number" && Number.isFinite(restartDelayMsRaw)

@@ -11,6 +11,7 @@ import { loadWorkspaceSkillEntries, type SkillEntry } from "../../agents/skills.
 import { loadConfig, writeConfigFile } from "../../config/config.js";
 import { getRemoteSkillEligibility } from "../../infra/skills-remote.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import { mirrorSkillsToKgm } from "../kgm/kgm-config-store.js";
 import {
   ErrorCodes,
   errorShape,
@@ -97,6 +98,20 @@ export const skillsHandlers: GatewayRequestHandlers = {
     const report = buildWorkspaceSkillStatus(workspaceDir, {
       config: cfg,
       eligibility: { remote: getRemoteSkillEligibility() },
+    });
+    void mirrorSkillsToKgm({
+      cfg,
+      agentId,
+      skills: report.skills.map((entry) => ({
+        name: entry.name,
+        skillKey: entry.skillKey,
+        source: entry.source,
+        primaryEnv: entry.primaryEnv,
+        emoji: entry.emoji,
+        homepage: entry.homepage,
+        disabled: entry.disabled,
+        eligible: entry.eligible,
+      })),
     });
     respond(true, report, undefined);
   },

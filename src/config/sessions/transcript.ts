@@ -2,7 +2,11 @@ import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding
 import fs from "node:fs";
 import path from "node:path";
 import type { SessionEntry } from "./types.js";
+import { resolveKgmProvider } from "../../gateway/kgm/kgm-client.js";
+import { resolveAgentScope } from "../../kgm/rbac.js";
+import { resolveAgentIdFromSessionKey } from "../../routing/session-key.js";
 import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
+import { loadConfig } from "../config.js";
 import { resolveDefaultSessionStorePath, resolveSessionTranscriptPath } from "./paths.js";
 import { loadSessionStore, updateSessionStore } from "./store.js";
 
@@ -143,5 +147,69 @@ export async function appendAssistantMessageToSessionTranscript(params: {
   }
 
   emitSessionTranscriptUpdate(sessionFile);
+  await ingestAssistantMirrorToKgm({
+    sessionKey,
+    sessionId: entry.sessionId,
+    preview: mirrorText,
+    timestamp: Date.now(),
+  });
   return { ok: true, sessionFile };
+}
+
+async function ingestAssistantMirrorToKgm(params: {
+  sessionKey: string;
+  sessionId: string;
+  preview: string;
+  timestamp: number;
+}) {
+  const cfg = loadConfig();
+  if (cfg.kgm?.enabled !== true) {
+    return;
+  }
+  const provider = resolveKgmProvider(cfg);
+  if (!provider) {
+    return;
+  }
+  const agentId = resolveAgentIdFromSessionKey(params.sessionKey);
+  const scope = resolveAgentScope(agentId);
+  const actor = { role: "system" as const, agentId, sessionKey: params.sessionKey };
+  const entryId = `${params.sessionId}:${params.timestamp}`;
+  const preview = params.preview.trim().slice(0, 200);
+  try {
+    await provider.upsertNode({
+      actor,
+      scope,
+      label: "Session",
+      key: params.sessionKey,
+      properties: {
+        sessionId: params.sessionId,
+        agentId,
+        sessionKey: params.sessionKey,
+        updatedAt: params.timestamp,
+      },
+    });
+    await provider.upsertNode({
+      actor,
+      scope,
+      label: "Message",
+      key: entryId,
+      properties: {
+        entryId,
+        sessionId: params.sessionId,
+        sessionKey: params.sessionKey,
+        role: "assistant",
+        ts: params.timestamp,
+        preview,
+      },
+    });
+    await provider.upsertEdge({
+      actor,
+      scope,
+      type: "HAS_MESSAGE",
+      from: { key: params.sessionKey, label: "Session" },
+      to: { key: entryId, label: "Message" },
+    });
+  } catch {
+    return;
+  }
 }

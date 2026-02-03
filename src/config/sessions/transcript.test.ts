@@ -1,11 +1,29 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { KgmProvider } from "../../kgm/provider.js";
 import {
   appendAssistantMessageToSessionTranscript,
   resolveMirroredTranscriptText,
 } from "./transcript.js";
+
+const mocks = vi.hoisted(() => ({
+  resolveKgmProvider: vi.fn(),
+  loadConfig: vi.fn(),
+}));
+
+vi.mock("../config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config.js")>();
+  return {
+    ...actual,
+    loadConfig: () => mocks.loadConfig(),
+  };
+});
+
+vi.mock("../../gateway/kgm/kgm-client.js", () => ({
+  resolveKgmProvider: () => mocks.resolveKgmProvider(),
+}));
 
 describe("resolveMirroredTranscriptText", () => {
   it("prefers media filenames over text", () => {
@@ -32,6 +50,8 @@ describe("appendAssistantMessageToSessionTranscript", () => {
     sessionsDir = path.join(tempDir, "agents", "main", "sessions");
     fs.mkdirSync(sessionsDir, { recursive: true });
     storePath = path.join(sessionsDir, "sessions.json");
+    mocks.loadConfig.mockReturnValue({ kgm: { enabled: false } });
+    mocks.resolveKgmProvider.mockReturnValue(null);
   });
 
   afterEach(() => {
@@ -77,7 +97,7 @@ describe("appendAssistantMessageToSessionTranscript", () => {
 
   it("creates transcript file and appends message for valid session", async () => {
     const sessionId = "test-session-id";
-    const sessionKey = "test-session";
+    const sessionKey = "agent:main:main";
     const store = {
       [sessionKey]: {
         sessionId,
@@ -110,5 +130,48 @@ describe("appendAssistantMessageToSessionTranscript", () => {
       expect(messageLine.message.content[0].type).toBe("text");
       expect(messageLine.message.content[0].text).toBe("Hello from delivery mirror!");
     }
+  });
+
+  it("ingests mirror message into KGM when enabled", async () => {
+    const sessionId = "test-session-id";
+    const sessionKey = "agent:main:main";
+    const store = {
+      [sessionKey]: {
+        sessionId,
+        chatType: "direct",
+        channel: "discord",
+      },
+    };
+    fs.writeFileSync(storePath, JSON.stringify(store), "utf-8");
+
+    const provider: KgmProvider = {
+      id: "memgraph",
+      query: vi.fn(async () => ({ rows: [] })),
+      ensureSchema: vi.fn(async () => undefined),
+      upsertNode: vi.fn(async (params) => ({ key: params.key, label: params.label })),
+      upsertEdge: vi.fn(async (params) => ({ type: params.type })),
+      search: vi.fn(async () => []),
+      touch: vi.fn(async () => undefined),
+      gc: vi.fn(async () => ({ removed: 0 })),
+      describeSchema: vi.fn(async () => ({ observed: {} })),
+    };
+    mocks.loadConfig.mockReturnValue({ kgm: { enabled: true } });
+    mocks.resolveKgmProvider.mockReturnValue(provider);
+
+    const result = await appendAssistantMessageToSessionTranscript({
+      sessionKey,
+      text: "Hello from delivery mirror!",
+      storePath,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(provider.upsertNode).toHaveBeenCalledTimes(2);
+    expect(provider.upsertEdge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "HAS_MESSAGE",
+        from: { key: sessionKey, label: "Session" },
+        to: expect.objectContaining({ label: "Message" }),
+      }),
+    );
   });
 });

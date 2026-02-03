@@ -3,7 +3,10 @@ import { makeTempWorkspace, writeWorkspaceFile } from "../test-helpers/workspace
 import {
   DEFAULT_MEMORY_ALT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
+  DEFAULT_USER_FILENAME,
+  filterBootstrapFilesForSession,
   loadWorkspaceBootstrapFiles,
+  type WorkspaceBootstrapFile,
 } from "./workspace.js";
 
 describe("loadWorkspaceBootstrapFiles", () => {
@@ -44,5 +47,19 @@ describe("loadWorkspaceBootstrapFiles", () => {
     );
 
     expect(memoryEntries).toHaveLength(0);
+  });
+});
+
+describe("filterBootstrapFilesForSession", () => {
+  it("removes USER/MEMORY for group sessions", () => {
+    const files: WorkspaceBootstrapFile[] = [
+      { name: DEFAULT_USER_FILENAME, path: "/tmp/USER.md", content: "user", missing: false },
+      { name: DEFAULT_MEMORY_FILENAME, path: "/tmp/MEMORY.md", content: "mem", missing: false },
+      { name: "AGENTS.md", path: "/tmp/AGENTS.md", content: "agents", missing: false },
+    ];
+
+    const filtered = filterBootstrapFilesForSession(files, "discord:group:dev");
+
+    expect(filtered.map((file) => file.name)).toEqual(["AGENTS.md"]);
   });
 });

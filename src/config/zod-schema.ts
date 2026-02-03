@@ -87,6 +87,34 @@ const MemorySchema = z
   .strict()
   .optional();
 
+const KgmSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    provider: z.union([z.literal("memgraph"), z.literal("none")]).optional(),
+    mode: z.union([z.literal("fs-only"), z.literal("fs+kgm"), z.literal("kgm-primary")]).optional(),
+    memgraph: z
+      .object({
+        url: z.string().optional(),
+        user: z.string().optional(),
+        password: z.string().optional(),
+        database: z.string().optional(),
+        timeoutMs: z.number().int().nonnegative().optional(),
+        maxPoolSize: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    decay: z
+      .object({
+        halfLifeMs: z.number().int().positive().optional(),
+        minWeight: z.number().min(0).optional(),
+        maxNodesPerScope: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
+
 export const OpenClawSchema = z
   .object({
     meta: z
@@ -506,6 +534,7 @@ export const OpenClawSchema = z
       .strict()
       .optional(),
     memory: MemorySchema,
+    kgm: KgmSchema,
     skills: z
       .object({
         allowBundled: z.array(z.string()).optional(),

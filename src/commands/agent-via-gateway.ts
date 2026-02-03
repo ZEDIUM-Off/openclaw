@@ -13,7 +13,7 @@ import {
   normalizeMessageChannel,
 } from "../utils/message-channel.js";
 import { agentCommand } from "./agent.js";
-import { resolveSessionKeyForRequest } from "./agent/session.js";
+import { resolveSessionKeyForRequest, resolveSessionKeyFromGateway } from "./agent/session.js";
 
 type AgentGatewayResult = {
   payloads?: Array<{
@@ -35,6 +35,7 @@ export type AgentCliOpts = {
   message: string;
   agent?: string;
   to?: string;
+  session?: string;
   sessionId?: string;
   thinking?: string;
   verbose?: string;
@@ -88,8 +89,10 @@ export async function agentViaGatewayCommand(opts: AgentCliOpts, runtime: Runtim
   if (!body) {
     throw new Error("Message (--message) is required");
   }
-  if (!opts.to && !opts.sessionId && !opts.agent) {
-    throw new Error("Pass --to <E.164>, --session-id, or --agent to choose a session");
+  if (!opts.to && !opts.session && !opts.sessionId && !opts.agent) {
+    throw new Error(
+      "Pass --to <E.164>, --session <ref>, --session-id, or --agent to choose a session",
+    );
   }
 
   const cfg = loadConfig();
@@ -106,12 +109,27 @@ export async function agentViaGatewayCommand(opts: AgentCliOpts, runtime: Runtim
   const timeoutSeconds = parseTimeoutSeconds({ cfg, timeout: opts.timeout });
   const gatewayTimeoutMs = Math.max(10_000, (timeoutSeconds + 30) * 1000);
 
-  const sessionKey = resolveSessionKeyForRequest({
+  const sessionResolution = resolveSessionKeyForRequest({
     cfg,
     agentId,
     to: opts.to,
     sessionId: opts.sessionId,
-  }).sessionKey;
+    sessionRef: opts.session,
+  });
+  let sessionKey = sessionResolution.sessionKey;
+  if (sessionResolution.sessionRefError && opts.session?.trim()) {
+    const gatewayResolved = await resolveSessionKeyFromGateway({
+      ref: opts.session,
+      agentId,
+    });
+    if (gatewayResolved.ok) {
+      sessionKey = gatewayResolved.key;
+    } else {
+      throw new Error(gatewayResolved.error);
+    }
+  } else if (sessionResolution.sessionRefError) {
+    throw new Error(sessionResolution.sessionRefError);
+  }
 
   const channel = normalizeMessageChannel(opts.channel) ?? DEFAULT_CHAT_CHANNEL;
   const idempotencyKey = opts.runId?.trim() || randomIdempotencyKey();

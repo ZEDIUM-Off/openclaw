@@ -291,13 +291,22 @@ export async function loadWorkspaceBootstrapFiles(dir: string): Promise<Workspac
 }
 
 const SUBAGENT_BOOTSTRAP_ALLOWLIST = new Set([DEFAULT_AGENTS_FILENAME, DEFAULT_TOOLS_FILENAME]);
+const GROUP_BOOTSTRAP_DENYLIST = new Set([
+  DEFAULT_USER_FILENAME,
+  DEFAULT_MEMORY_FILENAME,
+  DEFAULT_MEMORY_ALT_FILENAME,
+]);
 
 export function filterBootstrapFilesForSession(
   files: WorkspaceBootstrapFile[],
   sessionKey?: string,
 ): WorkspaceBootstrapFile[] {
-  if (!sessionKey || !isSubagentSessionKey(sessionKey)) {
-    return files;
+  let next = files;
+  if (sessionKey && isSubagentSessionKey(sessionKey)) {
+    next = next.filter((file) => SUBAGENT_BOOTSTRAP_ALLOWLIST.has(file.name));
   }
-  return files.filter((file) => SUBAGENT_BOOTSTRAP_ALLOWLIST.has(file.name));
+  if (sessionKey && (sessionKey.includes(":group:") || sessionKey.includes(":channel:"))) {
+    next = next.filter((file) => !GROUP_BOOTSTRAP_DENYLIST.has(file.name));
+  }
+  return next;
 }

@@ -167,16 +167,26 @@ async function resolveSessionKeyFromSessionId(params: {
 }): Promise<SessionReferenceResolution> {
   try {
     // Resolve via gateway so we respect store routing and visibility rules.
-    const result = await callGateway<{ key?: string }>({
-      method: "sessions.resolve",
+    const result = await callGateway<{ matches?: Array<{ key?: string }> }>({
+      method: "sessions.find",
       params: {
         sessionId: params.sessionId,
         spawnedBy: params.restrictToSpawned ? params.requesterInternalKey : undefined,
         includeGlobal: !params.restrictToSpawned,
         includeUnknown: !params.restrictToSpawned,
+        limit: 2,
       },
     });
-    const key = typeof result?.key === "string" ? result.key.trim() : "";
+    const matches = Array.isArray(result?.matches) ? result.matches : [];
+    if (matches.length === 0) {
+      throw new Error(
+        `Session not found: ${params.sessionId} (use the full sessionKey from sessions_list)`,
+      );
+    }
+    if (matches.length > 1) {
+      throw new Error(`Multiple sessions found for sessionId: ${params.sessionId}`);
+    }
+    const key = typeof matches[0]?.key === "string" ? matches[0].key.trim() : "";
     if (!key) {
       throw new Error(
         `Session not found: ${params.sessionId} (use the full sessionKey from sessions_list)`,
@@ -220,14 +230,19 @@ async function resolveSessionKeyFromKey(params: {
 }): Promise<SessionReferenceResolution | null> {
   try {
     // Try key-based resolution first so non-standard keys keep working.
-    const result = await callGateway<{ key?: string }>({
-      method: "sessions.resolve",
+    const result = await callGateway<{ matches?: Array<{ key?: string }> }>({
+      method: "sessions.find",
       params: {
         key: params.key,
         spawnedBy: params.restrictToSpawned ? params.requesterInternalKey : undefined,
+        limit: 2,
       },
     });
-    const key = typeof result?.key === "string" ? result.key.trim() : "";
+    const matches = Array.isArray(result?.matches) ? result.matches : [];
+    if (matches.length === 0) {
+      return null;
+    }
+    const key = typeof matches[0]?.key === "string" ? matches[0].key.trim() : "";
     if (!key) {
       return null;
     }

@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import crypto from "node:crypto";
+import type { SessionsFindResult } from "../../gateway/session-utils.types.js";
 import type { AnyAgentTool } from "./common.js";
 import { loadConfig } from "../../config/config.js";
 import { callGateway } from "../../gateway/call.js";
@@ -131,15 +132,25 @@ export function createSessionsSendTool(opts?: {
           label: labelParam,
           ...(requestedAgentId ? { agentId: requestedAgentId } : {}),
           ...(restrictToSpawned ? { spawnedBy: requesterInternalKey } : {}),
+          limit: 2,
         };
         let resolvedKey = "";
         try {
-          const resolved = await callGateway<{ key: string }>({
-            method: "sessions.resolve",
+          const resolved = await callGateway<SessionsFindResult>({
+            method: "sessions.find",
             params: resolveParams,
             timeoutMs: 10_000,
           });
-          resolvedKey = typeof resolved?.key === "string" ? resolved.key.trim() : "";
+          const matches = Array.isArray(resolved?.matches) ? resolved.matches : [];
+          if (matches.length === 1 && matches[0]?.key) {
+            resolvedKey = matches[0].key.trim();
+          } else if (matches.length > 1) {
+            return jsonResult({
+              runId: crypto.randomUUID(),
+              status: "error",
+              error: `Multiple sessions found for label: ${labelParam}`,
+            });
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
           if (restrictToSpawned) {

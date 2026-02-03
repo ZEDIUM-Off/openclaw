@@ -36,49 +36,69 @@ export async function resolveSessionKey(params: {
     params.meta.requireExisting ?? params.opts.requireExistingSession ?? false;
 
   if (params.meta.sessionLabel) {
-    const resolved = await params.gateway.request<{ ok: true; key: string }>("sessions.resolve", {
-      label: params.meta.sessionLabel,
-    });
-    if (!resolved?.key) {
+    const resolved = await params.gateway.request<{ matches?: Array<{ key?: string }> }>(
+      "sessions.find",
+      {
+        label: params.meta.sessionLabel,
+        limit: 2,
+      },
+    );
+    const key = resolved?.matches?.[0]?.key;
+    if (!key || resolved.matches?.length !== 1) {
       throw new Error(`Unable to resolve session label: ${params.meta.sessionLabel}`);
     }
-    return resolved.key;
+    return key;
   }
 
   if (params.meta.sessionKey) {
     if (!requireExisting) {
       return params.meta.sessionKey;
     }
-    const resolved = await params.gateway.request<{ ok: true; key: string }>("sessions.resolve", {
-      key: params.meta.sessionKey,
-    });
-    if (!resolved?.key) {
+    const resolved = await params.gateway.request<{ matches?: Array<{ key?: string }> }>(
+      "sessions.find",
+      {
+        key: params.meta.sessionKey,
+        limit: 2,
+      },
+    );
+    const key = resolved?.matches?.[0]?.key;
+    if (!key || resolved.matches?.length !== 1) {
       throw new Error(`Session key not found: ${params.meta.sessionKey}`);
     }
-    return resolved.key;
+    return key;
   }
 
   if (requestedLabel) {
-    const resolved = await params.gateway.request<{ ok: true; key: string }>("sessions.resolve", {
-      label: requestedLabel,
-    });
-    if (!resolved?.key) {
+    const resolved = await params.gateway.request<{ matches?: Array<{ key?: string }> }>(
+      "sessions.find",
+      {
+        label: requestedLabel,
+        limit: 2,
+      },
+    );
+    const key = resolved?.matches?.[0]?.key;
+    if (!key || resolved.matches?.length !== 1) {
       throw new Error(`Unable to resolve session label: ${requestedLabel}`);
     }
-    return resolved.key;
+    return key;
   }
 
   if (requestedKey) {
     if (!requireExisting) {
       return requestedKey;
     }
-    const resolved = await params.gateway.request<{ ok: true; key: string }>("sessions.resolve", {
-      key: requestedKey,
-    });
-    if (!resolved?.key) {
+    const resolved = await params.gateway.request<{ matches?: Array<{ key?: string }> }>(
+      "sessions.find",
+      {
+        key: requestedKey,
+        limit: 2,
+      },
+    );
+    const key = resolved?.matches?.[0]?.key;
+    if (!key || resolved.matches?.length !== 1) {
       throw new Error(`Session key not found: ${requestedKey}`);
     }
-    return resolved.key;
+    return key;
   }
 
   return params.fallbackKey;

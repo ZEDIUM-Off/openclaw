@@ -122,4 +122,39 @@ describe("agentCliCommand", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("resolves session ref via gateway before running agent", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-agent-cli-"));
+    const store = path.join(dir, "sessions.json");
+    mockConfig(store);
+
+    vi.mocked(callGateway).mockImplementation(async (request) => {
+      if (request.method === "sessions.find" && request.params?.sessionId === "triage") {
+        return { ts: Date.now(), matches: [] };
+      }
+      if (request.method === "sessions.find" && request.params?.label === "triage") {
+        return { ts: Date.now(), matches: [{ key: "agent:main:main" }] };
+      }
+      if (request.method === "agent") {
+        return {
+          runId: "idem-1",
+          status: "ok",
+          result: { payloads: [{ text: "hello" }] },
+        };
+      }
+      throw new Error("unexpected gateway call");
+    });
+
+    try {
+      await agentCliCommand({ message: "hi", session: "triage" }, runtime);
+
+      expect(callGateway).toHaveBeenCalledTimes(3);
+      const agentCall = vi
+        .mocked(callGateway)
+        .mock.calls.find((call) => call[0]?.method === "agent");
+      expect(agentCall?.[0]?.params?.sessionKey).toBe("agent:main:main");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

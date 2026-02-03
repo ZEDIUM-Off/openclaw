@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import crypto from "node:crypto";
+import type { SessionsFindResult } from "../../gateway/session-utils.types.js";
 import type { GatewayMessageChannel } from "../../utils/message-channel.js";
 import type { AnyAgentTool } from "./common.js";
 import { formatThinkingLevels, normalizeThinkLevel } from "../../auto-reply/thinking.js";
@@ -26,6 +27,7 @@ import {
 const SessionsSpawnToolSchema = Type.Object({
   task: Type.String(),
   label: Type.Optional(Type.String()),
+  reuse: Type.Optional(Type.Boolean()),
   agentId: Type.Optional(Type.String()),
   model: Type.Optional(Type.String()),
   thinking: Type.Optional(Type.String()),
@@ -88,6 +90,7 @@ export function createSessionsSpawnTool(opts?: {
       const params = args as Record<string, unknown>;
       const task = readStringParam(params, "task", { required: true });
       const label = typeof params.label === "string" ? params.label.trim() : "";
+      const reuse = params.reuse === true;
       const requestedAgentId = readStringParam(params, "agentId");
       const modelOverride = readStringParam(params, "model");
       const thinkingOverrideRaw = readStringParam(params, "thinking");
@@ -165,7 +168,43 @@ export function createSessionsSpawnTool(opts?: {
           });
         }
       }
-      const childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
+      if (reuse && !label) {
+        return jsonResult({
+          status: "error",
+          error: "reuse requires a non-empty label",
+        });
+      }
+
+      let childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
+      if (reuse && label) {
+        try {
+          const found = await callGateway<SessionsFindResult>({
+            method: "sessions.find",
+            params: {
+              label,
+              spawnedBy: requesterInternalKey,
+              agentId: targetAgentId,
+              limit: 2,
+            },
+            timeoutMs: 10_000,
+          });
+          if (found?.matches?.length === 1 && found.matches[0]?.key) {
+            childSessionKey = found.matches[0].key;
+          } else if (found?.matches?.length && found.matches.length > 1) {
+            return jsonResult({
+              status: "error",
+              error: `Multiple sessions found for label: ${label}`,
+            });
+          }
+        } catch (err) {
+          const messageText =
+            err instanceof Error ? err.message : typeof err === "string" ? err : "error";
+          return jsonResult({
+            status: "error",
+            error: messageText,
+          });
+        }
+      }
       const spawnedByKey = requesterInternalKey;
       const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
       const resolvedModel =

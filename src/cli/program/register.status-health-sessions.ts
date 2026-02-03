@@ -115,12 +115,22 @@ export function registerStatusHealthSessionsCommands(program: Command) {
     .option("--verbose", "Verbose logging", false)
     .option("--store <path>", "Path to session store (default: resolved from config)")
     .option("--active <minutes>", "Only show sessions updated within the past N minutes")
+    .option("--agent <id>", "Filter sessions by agent id")
+    .option("--search <text>", "Search sessions by label/subject/key")
+    .option("--pinned", "Only show pinned sessions", false)
+    .option("--pin <key>", "Pin a session key")
+    .option("--unpin <key>", "Unpin a session key")
+    .option("--sort <mode>", "Sort sessions (recent|pinned)")
     .addHelpText(
       "after",
       () =>
         `\n${theme.heading("Examples:")}\n${formatHelpExamples([
           ["openclaw sessions", "List all sessions."],
           ["openclaw sessions --active 120", "Only last 2 hours."],
+          ["openclaw sessions --agent main", "Only sessions for main agent."],
+          ["openclaw sessions --search invoice", "Search by label/subject/key."],
+          ["openclaw sessions --pinned", "Only pinned sessions."],
+          ["openclaw sessions --pin agent:main:thread:abc", "Pin a session."],
           ["openclaw sessions --json", "Machine-readable output."],
           ["openclaw sessions --store ./tmp/sessions.json", "Use a specific session store."],
         ])}\n\n${theme.muted(
@@ -139,6 +149,12 @@ export function registerStatusHealthSessionsCommands(program: Command) {
           json: Boolean(opts.json),
           store: opts.store as string | undefined,
           active: opts.active as string | undefined,
+          agent: opts.agent as string | undefined,
+          search: opts.search as string | undefined,
+          pinned: Boolean(opts.pinned),
+          pin: opts.pin as string | undefined,
+          unpin: opts.unpin as string | undefined,
+          sort: opts.sort as string | undefined,
         },
         defaultRuntime,
       );

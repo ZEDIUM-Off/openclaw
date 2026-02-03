@@ -23,9 +23,12 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "sessions_relay",
     "sessions_spawn",
     "session_status",
   ],
+  // Knowledge graph memory tools
+  "group:kgm": ["kgm", "context_sync"],
   // UI helpers
   "group:ui": ["browser", "canvas"],
   // Automation + infra
@@ -46,8 +49,11 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "sessions_relay",
     "sessions_spawn",
     "session_status",
+    "kgm",
+    "context_sync",
     "memory_search",
     "memory_get",
     "web_search",
@@ -61,7 +67,7 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
     allow: ["session_status"],
   },
   coding: {
-    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "image"],
+    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "group:kgm", "image"],
   },
   messaging: {
     allow: [

@@ -22,6 +22,7 @@ export type GatewaySessionRow = {
   chatType?: NormalizedChatType;
   origin?: SessionEntry["origin"];
   updatedAt: number | null;
+  pinnedAt?: number | null;
   sessionId?: string;
   systemSent?: boolean;
   abortedLastRun?: boolean;
@@ -77,6 +78,20 @@ export type SessionsListResult = {
   count: number;
   defaults: GatewaySessionsDefaults;
   sessions: GatewaySessionRow[];
+};
+
+export type SessionsFindMatch = {
+  key: string;
+  sessionId?: string;
+  label?: string;
+  agentId?: string;
+  kind?: GatewaySessionRow["kind"];
+  updatedAt?: number | null;
+};
+
+export type SessionsFindResult = {
+  ts: number;
+  matches: SessionsFindMatch[];
 };
 
 export type SessionsPatchResult = {

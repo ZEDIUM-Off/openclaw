@@ -45,6 +45,7 @@ export type {
   GatewayAgentRow,
   GatewaySessionRow,
   GatewaySessionsDefaults,
+  SessionsFindResult,
   SessionsListResult,
   SessionsPatchResult,
   SessionsPreviewEntry,
@@ -555,6 +556,8 @@ export function listSessionsFromStore(params: {
   const label = typeof opts.label === "string" ? opts.label.trim() : "";
   const agentId = typeof opts.agentId === "string" ? normalizeAgentId(opts.agentId) : "";
   const search = typeof opts.search === "string" ? opts.search.trim().toLowerCase() : "";
+  const pinnedOnly = opts.pinnedOnly === true;
+  const sort = opts.sort === "pinned" ? "pinned" : "recent";
   const activeMinutes =
     typeof opts.activeMinutes === "number" && Number.isFinite(opts.activeMinutes)
       ? Math.max(1, Math.floor(opts.activeMinutes))
@@ -594,6 +597,12 @@ export function listSessionsFromStore(params: {
         return true;
       }
       return entry?.label === label;
+    })
+    .filter(([, entry]) => {
+      if (!pinnedOnly) {
+        return true;
+      }
+      return typeof entry?.pinnedAt === "number" && Number.isFinite(entry.pinnedAt);
     })
     .map(([key, entry]) => {
       const updatedAt = entry?.updatedAt ?? null;
@@ -636,6 +645,7 @@ export function listSessionsFromStore(params: {
         chatType: entry?.chatType,
         origin,
         updatedAt,
+        pinnedAt: entry?.pinnedAt ?? null,
         sessionId: entry?.sessionId,
         systemSent: entry?.systemSent,
         abortedLastRun: entry?.abortedLastRun,
@@ -657,7 +667,16 @@ export function listSessionsFromStore(params: {
         lastAccountId: deliveryFields.lastAccountId ?? entry?.lastAccountId,
       };
     })
-    .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+    .toSorted((a, b) => {
+      if (sort === "pinned") {
+        const aPinned = a.pinnedAt ?? 0;
+        const bPinned = b.pinnedAt ?? 0;
+        if (aPinned !== bPinned) {
+          return bPinned - aPinned;
+        }
+      }
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    });
 
   if (search) {
     sessions = sessions.filter((s) => {

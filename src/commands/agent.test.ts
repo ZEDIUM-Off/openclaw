@@ -11,6 +11,9 @@ vi.mock("../agents/pi-embedded.js", () => ({
 vi.mock("../agents/model-catalog.js", () => ({
   loadModelCatalog: vi.fn(),
 }));
+vi.mock("../gateway/call.js", () => ({
+  callGateway: vi.fn(),
+}));
 
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -19,6 +22,7 @@ import { setTelegramRuntime } from "../../extensions/telegram/src/runtime.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import * as configModule from "../config/config.js";
+import { callGateway } from "../gateway/call.js";
 import { emitAgentEvent, onAgentEvent } from "../infra/agent-events.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createPluginRuntime } from "../plugins/runtime/index.js";
@@ -135,6 +139,25 @@ describe("agentCommand", () => {
 
       const callArgs = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
       expect(callArgs?.sessionId).toBe("session-123");
+    });
+  });
+
+  it("falls back to gateway session resolution when ref not found", async () => {
+    await withTempHome(async (home) => {
+      const store = path.join(home, "sessions.json");
+      mockConfig(home, store);
+
+      vi.mocked(callGateway)
+        .mockResolvedValueOnce({ ts: Date.now(), matches: [] })
+        .mockResolvedValueOnce({
+          ts: Date.now(),
+          matches: [{ key: "agent:main:main" }],
+        });
+
+      await agentCommand({ message: "hi", session: "triage" }, runtime);
+
+      expect(callGateway).toHaveBeenCalledTimes(2);
+      expect(vi.mocked(runEmbeddedPiAgent)).toHaveBeenCalled();
     });
   });
 

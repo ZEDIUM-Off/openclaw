@@ -1,0 +1,47 @@
+version: "3.8"
+
+services:
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: openclaw-memgraph
+    ports:
+      - "7687:7687"
+      - "7444:7444"
+    volumes:
+      - mg_lib:/var/lib/memgraph
+      - mg_log:/var/log/memgraph
+      - ./docker/memgraph/init:/docker-entrypoint-initdb.d
+    environment:
+      MEMGRAPH_USER: openclaw
+      MEMGRAPH_PASSWORD: openclaw
+    command:
+      - "--log-level=INFO"
+      - "--schema-info-enabled=true"
+      - "--storage-enable-schema-metadata=true"
+      - "--audit-enabled=true"
+      - "--query-log-directory=/var/log/memgraph/session_trace"
+      - "--storage-mode=IN_MEMORY_TRANSACTIONAL"
+      - "--query-log-directory=/var/log/memgraph/session_trace"
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'RETURN 0;' | mgconsole --host localhost --port 7687 --username openclaw --password openclaw >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  memgraph-lab:
+    image: memgraph/lab:latest
+    container_name: openclaw-memgraph-lab
+    depends_on:
+      memgraph:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      MEMGRAPH_HOST: memgraph
+      MEMGRAPH_PORT: "7687"
+      MEMGRAPH_URI: bolt://memgraph:7687
+
+volumes:
+  mg_lib:
+  mg_log:

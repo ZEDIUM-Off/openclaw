@@ -11,6 +11,7 @@ import { cronHandlers } from "./server-methods/cron.js";
 import { deviceHandlers } from "./server-methods/devices.js";
 import { execApprovalsHandlers } from "./server-methods/exec-approvals.js";
 import { healthHandlers } from "./server-methods/health.js";
+import { kgmHandlers } from "./server-methods/kgm.js";
 import { logsHandlers } from "./server-methods/logs.js";
 import { modelsHandlers } from "./server-methods/models.js";
 import { nodeHandlers } from "./server-methods/nodes.js";
@@ -64,6 +65,13 @@ const READ_METHODS = new Set([
   "voicewake.get",
   "sessions.list",
   "sessions.preview",
+  "sessions.find",
+  "kgm.admin.status",
+  "kgm.schema.describe",
+  "kgm.agent.search",
+  "kgm.agent.get",
+  "kgm.agent.context.get",
+  "kgm.agent.context.materialize",
   "cron.list",
   "cron.status",
   "cron.runs",
@@ -88,6 +96,14 @@ const WRITE_METHODS = new Set([
   "chat.send",
   "chat.abort",
   "browser.request",
+  "kgm.agent.putNode",
+  "kgm.agent.putEdge",
+  "kgm.agent.link",
+  "kgm.agent.pin",
+  "kgm.agent.touch",
+  "kgm.agent.gc",
+  "kgm.agent.ensureSchema",
+  "kgm.agent.context.patch",
 ]);
 
 function authorizeGatewayMethod(method: string, client: GatewayRequestOptions["client"]) {
@@ -177,6 +193,7 @@ export const coreGatewayHandlers: GatewayRequestHandlers = {
   ...ttsHandlers,
   ...skillsHandlers,
   ...sessionsHandlers,
+  ...kgmHandlers,
   ...systemHandlers,
   ...updateHandlers,
   ...nodeHandlers,

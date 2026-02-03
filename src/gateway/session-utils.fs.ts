@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { SessionPreviewItem } from "./session-utils.types.js";
 import { resolveSessionTranscriptPath } from "../config/sessions.js";
-import { stripEnvelope } from "./chat-sanitize.js";
+import { stripEnvelope, stripEnvelopeFromMessage } from "./chat-sanitize.js";
 
 export function readSessionMessages(
   sessionId: string,
@@ -95,6 +95,15 @@ const MAX_LINES_TO_SCAN = 10;
 type TranscriptMessage = {
   role?: string;
   content?: string | Array<{ type: string; text?: string }>;
+  text?: string;
+  id?: string;
+};
+
+type TranscriptLine = {
+  id?: string;
+  type?: string;
+  timestamp?: number | string;
+  message?: TranscriptMessage;
 };
 
 function extractTextFromContent(content: TranscriptMessage["content"]): string | null {
@@ -114,6 +123,78 @@ function extractTextFromContent(content: TranscriptMessage["content"]): string |
         return trimmed;
       }
     }
+  }
+  return null;
+}
+
+function resolveTranscriptEntryId(line: TranscriptLine): string | undefined {
+  if (typeof line.message?.id === "string" && line.message.id.trim()) {
+    return line.message.id.trim();
+  }
+  if (typeof line.id === "string" && line.id.trim()) {
+    return line.id.trim();
+  }
+  return undefined;
+}
+
+function extractMessageText(message: TranscriptMessage): string | null {
+  const cleaned = stripEnvelopeFromMessage(message) as TranscriptMessage;
+  if (typeof cleaned.text === "string" && cleaned.text.trim()) {
+    return cleaned.text.trim();
+  }
+  const text = extractTextFromContent(cleaned.content);
+  return text ? text.trim() : null;
+}
+
+export function readTranscriptMessageByEntryId(params: {
+  sessionId: string;
+  storePath: string | undefined;
+  entryId: string;
+  sessionFile?: string;
+  agentId?: string;
+}): { role?: string; text?: string } | null {
+  const candidates = resolveSessionTranscriptCandidates(
+    params.sessionId,
+    params.storePath,
+    params.sessionFile,
+    params.agentId,
+  );
+  const filePath = candidates.find((p) => fs.existsSync(p));
+  if (!filePath) {
+    return null;
+  }
+  const entryId = params.entryId.trim();
+  if (!entryId) {
+    return null;
+  }
+
+  try {
+    const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(line) as TranscriptLine;
+        const matchId = resolveTranscriptEntryId(parsed);
+        if (matchId !== entryId) {
+          continue;
+        }
+        const message = parsed?.message;
+        if (!message) {
+          return null;
+        }
+        const text = extractMessageText(message);
+        return {
+          role: typeof message.role === "string" ? message.role : undefined,
+          text: text ?? undefined,
+        };
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return null;
   }
   return null;
 }

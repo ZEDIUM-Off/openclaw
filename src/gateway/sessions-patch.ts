@@ -114,6 +114,28 @@ export async function applySessionsPatchToStore(params: {
     }
   }
 
+  if ("pin" in patch) {
+    const raw = patch.pin;
+    if (raw === null || raw === false) {
+      delete next.pinnedAt;
+    } else if (raw === true) {
+      next.pinnedAt = now;
+    }
+  }
+
+  if ("purpose" in patch) {
+    const raw = patch.purpose;
+    if (raw === null) {
+      delete next.purpose;
+    } else if (raw !== undefined) {
+      const trimmed = String(raw).trim();
+      if (!trimmed) {
+        return invalid("invalid purpose: empty");
+      }
+      next.purpose = trimmed.slice(0, 200);
+    }
+  }
+
   if ("thinkingLevel" in patch) {
     const raw = patch.thinkingLevel;
     if (raw === null) {

@@ -83,6 +83,24 @@ import type {
   TickEventSchema,
 } from "./frames.js";
 import type {
+  KgmAdminEnsureAgentParamsSchema,
+  KgmAdminInitParamsSchema,
+  KgmAdminStatusParamsSchema,
+  KgmAgentContextGetParamsSchema,
+  KgmAgentContextMaterializeParamsSchema,
+  KgmAgentContextPatchParamsSchema,
+  KgmAgentEnsureSchemaParamsSchema,
+  KgmAgentGcParamsSchema,
+  KgmAgentGetParamsSchema,
+  KgmAgentLinkParamsSchema,
+  KgmAgentPinParamsSchema,
+  KgmAgentPutEdgeParamsSchema,
+  KgmAgentPutNodeParamsSchema,
+  KgmAgentSearchParamsSchema,
+  KgmAgentTouchParamsSchema,
+  KgmSchemaDescribeParamsSchema,
+} from "./kgm.js";
+import type {
   ChatAbortParamsSchema,
   ChatEventSchema,
   ChatInjectParamsSchema,
@@ -105,6 +123,7 @@ import type {
 import type {
   SessionsCompactParamsSchema,
   SessionsDeleteParamsSchema,
+  SessionsFindParamsSchema,
   SessionsListParamsSchema,
   SessionsPatchParamsSchema,
   SessionsPreviewParamsSchema,
@@ -153,10 +172,29 @@ export type NodeEventParams = Static<typeof NodeEventParamsSchema>;
 export type SessionsListParams = Static<typeof SessionsListParamsSchema>;
 export type SessionsPreviewParams = Static<typeof SessionsPreviewParamsSchema>;
 export type SessionsResolveParams = Static<typeof SessionsResolveParamsSchema>;
+export type SessionsFindParams = Static<typeof SessionsFindParamsSchema>;
 export type SessionsPatchParams = Static<typeof SessionsPatchParamsSchema>;
 export type SessionsResetParams = Static<typeof SessionsResetParamsSchema>;
 export type SessionsDeleteParams = Static<typeof SessionsDeleteParamsSchema>;
 export type SessionsCompactParams = Static<typeof SessionsCompactParamsSchema>;
+export type KgmAdminStatusParams = Static<typeof KgmAdminStatusParamsSchema>;
+export type KgmAdminInitParams = Static<typeof KgmAdminInitParamsSchema>;
+export type KgmAdminEnsureAgentParams = Static<typeof KgmAdminEnsureAgentParamsSchema>;
+export type KgmSchemaDescribeParams = Static<typeof KgmSchemaDescribeParamsSchema>;
+export type KgmAgentSearchParams = Static<typeof KgmAgentSearchParamsSchema>;
+export type KgmAgentGetParams = Static<typeof KgmAgentGetParamsSchema>;
+export type KgmAgentPutNodeParams = Static<typeof KgmAgentPutNodeParamsSchema>;
+export type KgmAgentPutEdgeParams = Static<typeof KgmAgentPutEdgeParamsSchema>;
+export type KgmAgentLinkParams = Static<typeof KgmAgentLinkParamsSchema>;
+export type KgmAgentPinParams = Static<typeof KgmAgentPinParamsSchema>;
+export type KgmAgentTouchParams = Static<typeof KgmAgentTouchParamsSchema>;
+export type KgmAgentGcParams = Static<typeof KgmAgentGcParamsSchema>;
+export type KgmAgentEnsureSchemaParams = Static<typeof KgmAgentEnsureSchemaParamsSchema>;
+export type KgmAgentContextGetParams = Static<typeof KgmAgentContextGetParamsSchema>;
+export type KgmAgentContextPatchParams = Static<typeof KgmAgentContextPatchParamsSchema>;
+export type KgmAgentContextMaterializeParams = Static<
+  typeof KgmAgentContextMaterializeParamsSchema
+>;
 export type ConfigGetParams = Static<typeof ConfigGetParamsSchema>;
 export type ConfigSetParams = Static<typeof ConfigSetParamsSchema>;
 export type ConfigApplyParams = Static<typeof ConfigApplyParamsSchema>;

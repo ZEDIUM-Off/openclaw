@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { MsgContext } from "../../auto-reply/templating.js";
+import { normalizeAgentId, parseAgentSessionKey } from "../../routing/session-key.js";
 import {
   deliveryContextFromSession,
   mergeDeliveryContext,
@@ -138,7 +139,7 @@ export function loadSessionStore(
   }
 
   // Best-effort migration: message provider → channel naming.
-  for (const entry of Object.values(store)) {
+  for (const [key, entry] of Object.entries(store)) {
     if (!entry || typeof entry !== "object") {
       continue;
     }
@@ -158,6 +159,15 @@ export function loadSessionStore(
       delete rec.room;
     } else if ("room" in rec) {
       delete rec.room;
+    }
+
+    if (typeof rec.agentId !== "string") {
+      if (key !== "global" && key !== "unknown") {
+        const parsed = parseAgentSessionKey(key);
+        if (parsed?.agentId) {
+          rec.agentId = normalizeAgentId(parsed.agentId);
+        }
+      }
     }
   }
 

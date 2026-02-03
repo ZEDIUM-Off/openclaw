@@ -7,6 +7,7 @@ import os from "node:os";
 import type { EmbeddedRunAttemptParams, EmbeddedRunAttemptResult } from "./types.js";
 import { resolveHeartbeatPrompt } from "../../../auto-reply/heartbeat.js";
 import { resolveChannelCapabilities } from "../../../config/channel-capabilities.js";
+import { callGateway } from "../../../gateway/call.js";
 import { getMachineDisplayName } from "../../../infra/machine-name.js";
 import { MAX_IMAGE_BYTES } from "../../../media/constants.js";
 import { getGlobalHookRunner } from "../../../plugins/hook-runner-global.js";
@@ -187,7 +188,7 @@ export async function runEmbeddedAttempt(
     });
 
     const sessionLabel = params.sessionKey ?? params.sessionId;
-    const { bootstrapFiles: hookAdjustedBootstrapFiles, contextFiles } =
+    const { bootstrapFiles: hookAdjustedBootstrapFiles, contextFiles: initialContextFiles } =
       await resolveBootstrapContextForRun({
         workspaceDir: effectiveWorkspace,
         config: params.config,
@@ -195,6 +196,7 @@ export async function runEmbeddedAttempt(
         sessionId: params.sessionId,
         warn: makeBootstrapWarn({ sessionLabel, warn: (message) => log.warn(message) }),
       });
+    let contextFiles = initialContextFiles;
     const workspaceNotes = hookAdjustedBootstrapFiles.some(
       (file) => file.name === DEFAULT_BOOTSTRAP_FILENAME && !file.missing,
     )
@@ -342,11 +344,36 @@ export async function runEmbeddedAttempt(
     });
     const ttsHint = params.config ? buildTtsSystemPromptHint(params.config) : undefined;
 
+    let kgmContext: string | undefined;
+    if (params.config?.kgm?.enabled && params.sessionKey) {
+      try {
+        const result = await callGateway<{ content?: string }>({
+          method: "kgm.agent.context.materialize",
+          params: {
+            sessionKey: params.sessionKey,
+            maxNodes: 20,
+            maxMessages: 10,
+          },
+          timeoutMs: 5_000,
+        });
+        const content = typeof result?.content === "string" ? result.content.trim() : "";
+        if (content) {
+          kgmContext = content;
+          contextFiles = [];
+        }
+      } catch (err) {
+        log.warn(`kgm context materialize failed: ${String(err)}`);
+      }
+    }
+    const extraSystemPrompt = [params.extraSystemPrompt?.trim(), kgmContext]
+      .filter(Boolean)
+      .join("\n\n");
+
     const appendPrompt = buildEmbeddedSystemPrompt({
       workspaceDir: effectiveWorkspace,
       defaultThinkLevel: params.thinkLevel,
       reasoningLevel: params.reasoningLevel ?? "off",
-      extraSystemPrompt: params.extraSystemPrompt,
+      extraSystemPrompt: extraSystemPrompt || undefined,
       ownerNumbers: params.ownerNumbers,
       reasoningTagHint,
       heartbeatPrompt: isDefaultAgent

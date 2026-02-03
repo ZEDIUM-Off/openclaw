@@ -5,6 +5,8 @@ export const SessionsListParamsSchema = Type.Object(
   {
     limit: Type.Optional(Type.Integer({ minimum: 1 })),
     activeMinutes: Type.Optional(Type.Integer({ minimum: 1 })),
+    pinnedOnly: Type.Optional(Type.Boolean()),
+    sort: Type.Optional(Type.Union([Type.Literal("recent"), Type.Literal("pinned")])),
     includeGlobal: Type.Optional(Type.Boolean()),
     includeUnknown: Type.Optional(Type.Boolean()),
     /**
@@ -47,10 +49,26 @@ export const SessionsResolveParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const SessionsFindParamsSchema = Type.Object(
+  {
+    key: Type.Optional(NonEmptyString),
+    sessionId: Type.Optional(NonEmptyString),
+    label: Type.Optional(SessionLabelString),
+    agentId: Type.Optional(NonEmptyString),
+    spawnedBy: Type.Optional(NonEmptyString),
+    includeGlobal: Type.Optional(Type.Boolean()),
+    includeUnknown: Type.Optional(Type.Boolean()),
+    limit: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { additionalProperties: false },
+);
+
 export const SessionsPatchParamsSchema = Type.Object(
   {
     key: NonEmptyString,
     label: Type.Optional(Type.Union([SessionLabelString, Type.Null()])),
+    pin: Type.Optional(Type.Union([Type.Boolean(), Type.Null()])),
+    purpose: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     thinkingLevel: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     verboseLevel: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),
     reasoningLevel: Type.Optional(Type.Union([NonEmptyString, Type.Null()])),

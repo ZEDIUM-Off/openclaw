@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
 import { applySessionsPatchToStore } from "./sessions-patch.js";
@@ -94,5 +95,57 @@ describe("gateway sessions patch", () => {
     expect(res.entry.authProfileOverride).toBeUndefined();
     expect(res.entry.authProfileOverrideSource).toBeUndefined();
     expect(res.entry.authProfileOverrideCompactionCount).toBeUndefined();
+  });
+
+  test("sets pinnedAt when pin=true", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-03T00:00:00Z"));
+    const store: Record<string, SessionEntry> = {
+      "agent:main:main": { sessionId: "sess", updatedAt: 1 } as SessionEntry,
+    };
+    const res = await applySessionsPatchToStore({
+      cfg: {} as OpenClawConfig,
+      store,
+      storeKey: "agent:main:main",
+      patch: { pin: true },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.entry.pinnedAt).toBe(Date.parse("2026-02-03T00:00:00Z"));
+    }
+    vi.useRealTimers();
+  });
+
+  test("clears pinnedAt when pin=false", async () => {
+    const store: Record<string, SessionEntry> = {
+      "agent:main:main": { pinnedAt: 123, sessionId: "sess", updatedAt: 1 } as SessionEntry,
+    };
+    const res = await applySessionsPatchToStore({
+      cfg: {} as OpenClawConfig,
+      store,
+      storeKey: "agent:main:main",
+      patch: { pin: false },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.entry.pinnedAt).toBeUndefined();
+    }
+  });
+
+  test("trims and caps purpose", async () => {
+    const store: Record<string, SessionEntry> = {
+      "agent:main:main": { sessionId: "sess", updatedAt: 1 } as SessionEntry,
+    };
+    const long = `  ${"x".repeat(250)}  `;
+    const res = await applySessionsPatchToStore({
+      cfg: {} as OpenClawConfig,
+      store,
+      storeKey: "agent:main:main",
+      patch: { purpose: long },
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.entry.purpose?.length).toBe(200);
+    }
   });
 });

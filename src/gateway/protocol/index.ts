@@ -150,6 +150,8 @@ import {
   SessionsCompactParamsSchema,
   type SessionsDeleteParams,
   SessionsDeleteParamsSchema,
+  type SessionsFindParams,
+  SessionsFindParamsSchema,
   type SessionsListParams,
   SessionsListParamsSchema,
   type SessionsPatchParams,
@@ -160,6 +162,38 @@ import {
   SessionsResetParamsSchema,
   type SessionsResolveParams,
   SessionsResolveParamsSchema,
+  type KgmAdminEnsureAgentParams,
+  KgmAdminEnsureAgentParamsSchema,
+  type KgmAdminInitParams,
+  KgmAdminInitParamsSchema,
+  type KgmAdminStatusParams,
+  KgmAdminStatusParamsSchema,
+  type KgmAgentContextGetParams,
+  KgmAgentContextGetParamsSchema,
+  type KgmAgentContextMaterializeParams,
+  KgmAgentContextMaterializeParamsSchema,
+  type KgmAgentContextPatchParams,
+  KgmAgentContextPatchParamsSchema,
+  type KgmAgentEnsureSchemaParams,
+  KgmAgentEnsureSchemaParamsSchema,
+  type KgmAgentGcParams,
+  KgmAgentGcParamsSchema,
+  type KgmAgentGetParams,
+  KgmAgentGetParamsSchema,
+  type KgmAgentLinkParams,
+  KgmAgentLinkParamsSchema,
+  type KgmAgentPinParams,
+  KgmAgentPinParamsSchema,
+  type KgmAgentPutEdgeParams,
+  KgmAgentPutEdgeParamsSchema,
+  type KgmAgentPutNodeParams,
+  KgmAgentPutNodeParamsSchema,
+  type KgmAgentSearchParams,
+  KgmAgentSearchParamsSchema,
+  type KgmAgentTouchParams,
+  KgmAgentTouchParamsSchema,
+  type KgmSchemaDescribeParams,
+  KgmSchemaDescribeParamsSchema,
   type ShutdownEvent,
   ShutdownEventSchema,
   type SkillsBinsParams,
@@ -260,6 +294,7 @@ export const validateSessionsPreviewParams = ajv.compile<SessionsPreviewParams>(
 export const validateSessionsResolveParams = ajv.compile<SessionsResolveParams>(
   SessionsResolveParamsSchema,
 );
+export const validateSessionsFindParams = ajv.compile<SessionsFindParams>(SessionsFindParamsSchema);
 export const validateSessionsPatchParams =
   ajv.compile<SessionsPatchParams>(SessionsPatchParamsSchema);
 export const validateSessionsResetParams =
@@ -270,6 +305,42 @@ export const validateSessionsDeleteParams = ajv.compile<SessionsDeleteParams>(
 export const validateSessionsCompactParams = ajv.compile<SessionsCompactParams>(
   SessionsCompactParamsSchema,
 );
+export const validateKgmAdminStatusParams = ajv.compile<KgmAdminStatusParams>(
+  KgmAdminStatusParamsSchema,
+);
+export const validateKgmAdminInitParams = ajv.compile<KgmAdminInitParams>(KgmAdminInitParamsSchema);
+export const validateKgmAdminEnsureAgentParams = ajv.compile<KgmAdminEnsureAgentParams>(
+  KgmAdminEnsureAgentParamsSchema,
+);
+export const validateKgmSchemaDescribeParams = ajv.compile<KgmSchemaDescribeParams>(
+  KgmSchemaDescribeParamsSchema,
+);
+export const validateKgmAgentSearchParams = ajv.compile<KgmAgentSearchParams>(
+  KgmAgentSearchParamsSchema,
+);
+export const validateKgmAgentGetParams = ajv.compile<KgmAgentGetParams>(KgmAgentGetParamsSchema);
+export const validateKgmAgentPutNodeParams = ajv.compile<KgmAgentPutNodeParams>(
+  KgmAgentPutNodeParamsSchema,
+);
+export const validateKgmAgentPutEdgeParams = ajv.compile<KgmAgentPutEdgeParams>(
+  KgmAgentPutEdgeParamsSchema,
+);
+export const validateKgmAgentLinkParams = ajv.compile<KgmAgentLinkParams>(KgmAgentLinkParamsSchema);
+export const validateKgmAgentPinParams = ajv.compile<KgmAgentPinParams>(KgmAgentPinParamsSchema);
+export const validateKgmAgentTouchParams =
+  ajv.compile<KgmAgentTouchParams>(KgmAgentTouchParamsSchema);
+export const validateKgmAgentGcParams = ajv.compile<KgmAgentGcParams>(KgmAgentGcParamsSchema);
+export const validateKgmAgentEnsureSchemaParams = ajv.compile<KgmAgentEnsureSchemaParams>(
+  KgmAgentEnsureSchemaParamsSchema,
+);
+export const validateKgmAgentContextGetParams = ajv.compile<KgmAgentContextGetParams>(
+  KgmAgentContextGetParamsSchema,
+);
+export const validateKgmAgentContextPatchParams = ajv.compile<KgmAgentContextPatchParams>(
+  KgmAgentContextPatchParamsSchema,
+);
+export const validateKgmAgentContextMaterializeParams =
+  ajv.compile<KgmAgentContextMaterializeParams>(KgmAgentContextMaterializeParamsSchema);
 export const validateConfigGetParams = ajv.compile<ConfigGetParams>(ConfigGetParamsSchema);
 export const validateConfigSetParams = ajv.compile<ConfigSetParams>(ConfigSetParamsSchema);
 export const validateConfigApplyParams = ajv.compile<ConfigApplyParams>(ConfigApplyParamsSchema);
@@ -411,6 +482,22 @@ export {
   SessionsResetParamsSchema,
   SessionsDeleteParamsSchema,
   SessionsCompactParamsSchema,
+  KgmAdminStatusParamsSchema,
+  KgmAdminInitParamsSchema,
+  KgmAdminEnsureAgentParamsSchema,
+  KgmSchemaDescribeParamsSchema,
+  KgmAgentSearchParamsSchema,
+  KgmAgentGetParamsSchema,
+  KgmAgentPutNodeParamsSchema,
+  KgmAgentPutEdgeParamsSchema,
+  KgmAgentLinkParamsSchema,
+  KgmAgentPinParamsSchema,
+  KgmAgentTouchParamsSchema,
+  KgmAgentGcParamsSchema,
+  KgmAgentEnsureSchemaParamsSchema,
+  KgmAgentContextGetParamsSchema,
+  KgmAgentContextPatchParamsSchema,
+  KgmAgentContextMaterializeParamsSchema,
   ConfigGetParamsSchema,
   ConfigSetParamsSchema,
   ConfigApplyParamsSchema,
@@ -539,6 +626,22 @@ export type {
   SessionsResetParams,
   SessionsDeleteParams,
   SessionsCompactParams,
+  KgmAdminStatusParams,
+  KgmAdminInitParams,
+  KgmAdminEnsureAgentParams,
+  KgmSchemaDescribeParams,
+  KgmAgentSearchParams,
+  KgmAgentGetParams,
+  KgmAgentPutNodeParams,
+  KgmAgentPutEdgeParams,
+  KgmAgentLinkParams,
+  KgmAgentPinParams,
+  KgmAgentTouchParams,
+  KgmAgentGcParams,
+  KgmAgentEnsureSchemaParams,
+  KgmAgentContextGetParams,
+  KgmAgentContextPatchParams,
+  KgmAgentContextMaterializeParams,
   CronJob,
   CronListParams,
   CronStatusParams,

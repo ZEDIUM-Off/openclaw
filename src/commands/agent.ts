@@ -60,6 +60,7 @@ import { deliverAgentCommandResult } from "./agent/delivery.js";
 import { resolveAgentRunContext } from "./agent/run-context.js";
 import { updateSessionStoreAfterAgentRun } from "./agent/session-store.js";
 import { resolveSession } from "./agent/session.js";
+import { resolveSessionKeyFromGateway } from "./agent/session.js";
 
 export async function agentCommand(
   opts: AgentCommandOpts,
@@ -70,8 +71,10 @@ export async function agentCommand(
   if (!body) {
     throw new Error("Message (--message) is required");
   }
-  if (!opts.to && !opts.sessionId && !opts.sessionKey && !opts.agentId) {
-    throw new Error("Pass --to <E.164>, --session-id, or --agent to choose a session");
+  if (!opts.to && !opts.session && !opts.sessionId && !opts.sessionKey && !opts.agentId) {
+    throw new Error(
+      "Pass --to <E.164>, --session <ref>, --session-id, or --agent to choose a session",
+    );
   }
 
   const cfg = loadConfig();
@@ -136,13 +139,32 @@ export async function agentCommand(
     overrideSeconds: timeoutSecondsRaw,
   });
 
-  const sessionResolution = resolveSession({
+  let sessionResolution = resolveSession({
     cfg,
     to: opts.to,
     sessionId: opts.sessionId,
     sessionKey: opts.sessionKey,
+    sessionRef: opts.session,
     agentId: agentIdOverride,
   });
+
+  if (sessionResolution.sessionRefError && opts.session?.trim()) {
+    const gatewayResolved = await resolveSessionKeyFromGateway({
+      ref: opts.session,
+      agentId: agentIdOverride,
+    });
+    if (gatewayResolved.ok) {
+      sessionResolution = resolveSession({
+        cfg,
+        to: opts.to,
+        sessionId: opts.sessionId,
+        sessionKey: gatewayResolved.key,
+        agentId: agentIdOverride,
+      });
+    } else {
+      throw new Error(gatewayResolved.error);
+    }
+  }
 
   const {
     sessionId,
@@ -153,7 +175,11 @@ export async function agentCommand(
     isNewSession,
     persistedThinking,
     persistedVerbose,
+    sessionRefError,
   } = sessionResolution;
+  if (sessionRefError) {
+    throw new Error(sessionRefError);
+  }
   let sessionEntry = resolvedSessionEntry;
   const runId = opts.runId?.trim() || sessionId;
 

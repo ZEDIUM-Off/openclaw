@@ -332,3 +332,54 @@ describe("listSessionsFromStore search", () => {
     expect(result.sessions.length).toBe(1);
   });
 });
+
+describe("listSessionsFromStore pinned", () => {
+  const baseCfg = {
+    session: { mainKey: "main" },
+    agents: { list: [{ id: "main", default: true }] },
+  } as OpenClawConfig;
+
+  const store: Record<string, SessionEntry> = {
+    "agent:main:alpha": {
+      sessionId: "s1",
+      updatedAt: 10,
+      pinnedAt: 100,
+    } as SessionEntry,
+    "agent:main:beta": {
+      sessionId: "s2",
+      updatedAt: 20,
+    } as SessionEntry,
+    "agent:main:gamma": {
+      sessionId: "s3",
+      updatedAt: 5,
+      pinnedAt: 200,
+    } as SessionEntry,
+  };
+
+  test("filters pinnedOnly", () => {
+    const result = listSessionsFromStore({
+      cfg: baseCfg,
+      storePath: "/tmp/sessions.json",
+      store,
+      opts: { pinnedOnly: true },
+    });
+    expect(result.sessions.map((entry) => entry.key)).toEqual([
+      "agent:main:gamma",
+      "agent:main:alpha",
+    ]);
+  });
+
+  test("sorts pinned sessions before others", () => {
+    const result = listSessionsFromStore({
+      cfg: baseCfg,
+      storePath: "/tmp/sessions.json",
+      store,
+      opts: { sort: "pinned" },
+    });
+    expect(result.sessions.map((entry) => entry.key)).toEqual([
+      "agent:main:gamma",
+      "agent:main:alpha",
+      "agent:main:beta",
+    ]);
+  });
+});

@@ -109,6 +109,7 @@ function buildMessagingSection(params: {
     "## Messaging",
     "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
+    "- Cross-session relay → use sessions_relay(sessionKey, message)",
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
     params.availableTools.has("message")
       ? [
@@ -238,9 +239,12 @@ export function buildAgentSystemPrompt(params: {
     sessions_list: "List other sessions (incl. sub-agents) with filters/last",
     sessions_history: "Fetch history for another session/sub-agent",
     sessions_send: "Send a message to another session/sub-agent",
+    sessions_relay: "Relay a message via an isolated bridge",
     sessions_spawn: "Spawn a sub-agent session",
     session_status:
       "Show a /status-equivalent status card (usage + time + Reasoning/Verbose/Elevated); use for model-use questions (📊 session_status); optional per-session model override",
+    kgm: "Query and update Knowledge Graph Memory",
+    context_sync: "Curate the KGM context set",
     image: "Analyze an image with the configured image model",
   };
 
@@ -266,6 +270,9 @@ export function buildAgentSystemPrompt(params: {
     "sessions_list",
     "sessions_history",
     "sessions_send",
+    "sessions_relay",
+    "kgm",
+    "context_sync",
     "session_status",
     "image",
   ];
@@ -399,6 +406,9 @@ export function buildAgentSystemPrompt(params: {
           "- sessions_list: list sessions",
           "- sessions_history: fetch session history",
           "- sessions_send: send to another session",
+          "- sessions_relay: relay to another session",
+          "- kgm: query/update knowledge graph memory",
+          "- context_sync: curate context selections",
           '- session_status: show usage/time/model state and answer "what model are we using?"',
         ].join("\n"),
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",

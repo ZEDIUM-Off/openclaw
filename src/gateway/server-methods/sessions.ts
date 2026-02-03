@@ -18,6 +18,7 @@ import {
   formatValidationErrors,
   validateSessionsCompactParams,
   validateSessionsDeleteParams,
+  validateSessionsFindParams,
   validateSessionsListParams,
   validateSessionsPatchParams,
   validateSessionsPreviewParams,
@@ -32,12 +33,16 @@ import {
   readSessionPreviewItemsFromTranscript,
   resolveGatewaySessionStoreTarget,
   resolveSessionTranscriptCandidates,
+  type SessionsFindResult,
   type SessionsPatchResult,
   type SessionsPreviewEntry,
   type SessionsPreviewResult,
 } from "../session-utils.js";
 import { applySessionsPatchToStore } from "../sessions-patch.js";
-import { resolveSessionKeyFromResolveParams } from "../sessions-resolve.js";
+import {
+  findSessionsFromFindParams,
+  resolveSessionKeyFromResolveParams,
+} from "../sessions-resolve.js";
 
 export const sessionsHandlers: GatewayRequestHandlers = {
   "sessions.list": ({ params, respond }) => {
@@ -152,6 +157,30 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
     respond(true, { ok: true, key: resolved.key }, undefined);
+  },
+  "sessions.find": ({ params, respond }) => {
+    if (!validateSessionsFindParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid sessions.find params: ${formatValidationErrors(validateSessionsFindParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const cfg = loadConfig();
+    const resolved = findSessionsFromFindParams({ cfg, p: params });
+    if (!resolved.ok) {
+      respond(false, undefined, resolved.error);
+      return;
+    }
+    const result: SessionsFindResult = {
+      ts: Date.now(),
+      matches: resolved.matches,
+    };
+    respond(true, result, undefined);
   },
   "sessions.patch": async ({ params, respond, context }) => {
     if (!validateSessionsPatchParams(params)) {

@@ -35,6 +35,12 @@ export type SessionEntry = {
   sessionFile?: string;
   /** Parent session key that spawned this session (used for sandbox session-tool scoping). */
   spawnedBy?: string;
+  /** Best-effort agent id derived from session key. */
+  agentId?: string;
+  /** Timestamp (ms) when session was pinned/active in UX. */
+  pinnedAt?: number;
+  /** Optional short purpose/label for quick UX. */
+  purpose?: string;
   systemSent?: boolean;
   abortedLastRun?: boolean;
   chatType?: SessionChatType;

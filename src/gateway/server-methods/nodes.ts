@@ -9,6 +9,7 @@ import {
   requestNodePairing,
   verifyNodeToken,
 } from "../../infra/node-pairing.js";
+import { mirrorNodesToKgm, readNodesFromKgm } from "../kgm/kgm-config-store.js";
 import { isNodeCommandAllowed, resolveNodeCommandAllowlist } from "../node-command-policy.js";
 import {
   ErrorCodes,
@@ -236,6 +237,13 @@ export const nodeHandlers: GatewayRequestHandlers = {
       return;
     }
     await respondUnavailableOnThrow(respond, async () => {
+      const cfg = loadConfig();
+      const kgmNodes = await readNodesFromKgm({ cfg, log: context.logGateway });
+      if (kgmNodes && kgmNodes.length > 0) {
+        respond(true, { ts: Date.now(), nodes: kgmNodes }, undefined);
+        return;
+      }
+
       const list = await listDevicePairing();
       const pairedById = new Map(
         list.paired
@@ -304,6 +312,7 @@ export const nodeHandlers: GatewayRequestHandlers = {
         return a.nodeId.localeCompare(b.nodeId);
       });
 
+      void mirrorNodesToKgm({ cfg, nodes, log: context.logGateway });
       respond(true, { ts: Date.now(), nodes }, undefined);
     });
   },

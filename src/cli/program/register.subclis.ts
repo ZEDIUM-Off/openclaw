@@ -153,6 +153,14 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "kgm",
+    description: "Knowledge Graph Memory (KGM) commands",
+    register: async (program) => {
+      const mod = await import("./register.kgm.js");
+      mod.registerKgmCommands(program);
+    },
+  },
+  {
     name: "hooks",
     description: "Hooks tooling",
     register: async (program) => {

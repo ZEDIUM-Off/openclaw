@@ -7,11 +7,11 @@ function createGateway(resolveLabelKey = "agent:main:label"): {
   request: ReturnType<typeof vi.fn>;
 } {
   const request = vi.fn(async (method: string, params: Record<string, unknown>) => {
-    if (method === "sessions.resolve" && "label" in params) {
-      return { ok: true, key: resolveLabelKey };
+    if (method === "sessions.find" && "label" in params) {
+      return { matches: [{ key: resolveLabelKey }] };
     }
-    if (method === "sessions.resolve" && "key" in params) {
-      return { ok: true, key: params.key as string };
+    if (method === "sessions.find" && "key" in params) {
+      return { matches: [{ key: params.key as string }] };
     }
     return { ok: true };
   });
@@ -36,7 +36,7 @@ describe("acp session mapper", () => {
 
     expect(key).toBe("agent:main:label");
     expect(request).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledWith("sessions.resolve", { label: "support" });
+    expect(request).toHaveBeenCalledWith("sessions.find", { label: "support", limit: 2 });
   });
 
   it("lets meta sessionKey override default label", async () => {

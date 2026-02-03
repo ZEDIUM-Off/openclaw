@@ -15,6 +15,7 @@ import {
 } from "../../agents/workspace.js";
 import { loadConfig } from "../../config/config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
+import { mirrorAgentsToKgm, readAgentsFromKgm } from "../kgm/kgm-config-store.js";
 import {
   ErrorCodes,
   errorShape,
@@ -124,7 +125,7 @@ function resolveAgentIdOrError(agentIdRaw: string, cfg: ReturnType<typeof loadCo
 }
 
 export const agentsHandlers: GatewayRequestHandlers = {
-  "agents.list": ({ params, respond }) => {
+  "agents.list": async ({ params, respond, context }) => {
     if (!validateAgentsListParams(params)) {
       respond(
         false,
@@ -138,8 +139,23 @@ export const agentsHandlers: GatewayRequestHandlers = {
     }
 
     const cfg = loadConfig();
-    const result = listAgentsForGateway(cfg);
-    respond(true, result, undefined);
+    const base = listAgentsForGateway(cfg);
+    const agents = await readAgentsFromKgm({ cfg, log: context.logGateway });
+    if (agents && agents.length > 0) {
+      respond(
+        true,
+        {
+          defaultId: base.defaultId,
+          mainKey: base.mainKey,
+          scope: base.scope,
+          agents,
+        },
+        undefined,
+      );
+      return;
+    }
+    void mirrorAgentsToKgm({ cfg, agents: base.agents, log: context.logGateway });
+    respond(true, base, undefined);
   },
   "agents.files.list": async ({ params, respond }) => {
     if (!validateAgentsFilesListParams(params)) {

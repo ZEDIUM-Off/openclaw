@@ -39,7 +39,13 @@ export function renderTab(state: AppViewState, tab: Tab) {
   `;
 }
 
-export function renderChatControls(state: AppViewState) {
+export type RenderChatControlsOptions = {
+  /** When true (e.g. on chat tab with sessions sidebar), hide the session select; selection is via sidebar only. */
+  hideSessionSelect?: boolean;
+};
+
+export function renderChatControls(state: AppViewState, options?: RenderChatControlsOptions) {
+  const hideSessionSelect = options?.hideSessionSelect ?? false;
   const mainSessionKey = resolveMainSessionKey(state.hello, state.sessionsResult);
   const sessionOptions = resolveSessionOptions(
     state.sessionKey,
@@ -86,39 +92,44 @@ export function renderChatControls(state: AppViewState) {
   `;
   return html`
     <div class="chat-controls">
-      <label class="field chat-controls__session">
-        <select
-          .value=${state.sessionKey}
-          ?disabled=${!state.connected}
-          @change=${(e: Event) => {
-            const next = (e.target as HTMLSelectElement).value;
-            state.sessionKey = next;
-            state.chatMessage = "";
-            state.chatStream = null;
-            state.chatStreamStartedAt = null;
-            state.chatRunId = null;
-            state.resetToolStream();
-            state.resetChatScroll();
-            state.applySettings({
-              ...state.settings,
-              sessionKey: next,
-              lastActiveSessionKey: next,
-            });
-            void state.loadAssistantIdentity();
-            syncUrlWithSessionKey(state, next, true);
-            void loadChatHistory(state);
-          }}
-        >
-          ${repeat(
-            sessionOptions,
-            (entry) => entry.key,
-            (entry) =>
-              html`<option value=${entry.key}>
-                ${entry.displayName ?? entry.key}
-              </option>`,
-          )}
-        </select>
-      </label>
+      ${!hideSessionSelect
+        ? html`
+            <label class="field chat-controls__session">
+              <select
+                .value=${state.sessionKey}
+                ?disabled=${!state.connected}
+                @change=${(e: Event) => {
+                  const next = (e.target as HTMLSelectElement).value;
+                  state.sessionKey = next;
+                  state.chatMessage = "";
+                  state.chatStream = null;
+                  state.chatStreamStartedAt = null;
+                  state.chatRunId = null;
+                  state.resetToolStream();
+                  state.resetChatScroll();
+                  state.applySettings({
+                    ...state.settings,
+                    sessionKey: next,
+                    lastActiveSessionKey: next,
+                  });
+                  void state.loadAssistantIdentity();
+                  syncUrlWithSessionKey(state, next, true);
+                  void loadChatHistory(state);
+                }}
+              >
+                ${repeat(
+                  sessionOptions,
+                  (entry) => entry.key,
+                  (entry) =>
+                    html`<option value=${entry.key}>
+                      ${entry.displayName ?? entry.key}
+                    </option>`,
+                )}
+              </select>
+            </label>
+            <span class="chat-controls__separator">|</span>
+          `
+        : ""}
       <button
         class="btn btn--sm btn--icon"
         ?disabled=${state.chatLoading || !state.connected}
@@ -169,6 +180,53 @@ export function renderChatControls(state: AppViewState) {
       >
         ${focusIcon}
       </button>
+    </div>
+  `;
+}
+
+const CHAT_SESSION_TABS_MAX = 5;
+
+export type RenderChatSessionTabsOptions = {
+  currentSessionKey: string;
+  sessionsResult: SessionsListResult | null;
+  onSelectSession: (key: string) => void;
+};
+
+/** Renders a horizontal bar of session tabs (current + recent, max CHAT_SESSION_TABS_MAX) above the chat. */
+export function renderChatSessionTabs(options: RenderChatSessionTabsOptions) {
+  const { currentSessionKey, sessionsResult, onSelectSession } = options;
+  const sessions = sessionsResult?.sessions ?? [];
+  const seen = new Set<string>();
+  const tabEntries: Array<{ key: string; label: string }> = [];
+  const add = (key: string, row?: SessionsListResult["sessions"][number]) => {
+    if (seen.has(key) || tabEntries.length >= CHAT_SESSION_TABS_MAX) return;
+    seen.add(key);
+    const label =
+      row?.label?.trim() || row?.displayName?.trim() || (key.length > 24 ? `${key.slice(0, 22)}…` : key);
+    tabEntries.push({ key, label });
+  };
+  add(currentSessionKey, sessions.find((s) => s.key === currentSessionKey));
+  for (const s of sessions) {
+    add(s.key, s);
+  }
+  if (tabEntries.length <= 1) return html``;
+  return html`
+    <div class="tabs tabs-boxed bg-base-200/50 rounded-lg p-1 mb-2 flex-nowrap overflow-x-auto" role="tablist">
+      ${repeat(
+        tabEntries,
+        (e) => e.key,
+        (e) => html`
+          <button
+            type="button"
+            role="tab"
+            class="tab tab-sm ${e.key === currentSessionKey ? "tab-active" : ""}"
+            aria-selected=${e.key === currentSessionKey}
+            @click=${() => onSelectSession(e.key)}
+          >
+            ${e.label}
+          </button>
+        `,
+      )}
     </div>
   `;
 }

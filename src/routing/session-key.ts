@@ -4,6 +4,7 @@ export {
   isAcpSessionKey,
   isSubagentSessionKey,
   parseAgentSessionKey,
+  resolveThreadParentSessionKey,
   type ParsedAgentSessionKey,
 } from "../sessions/session-key-utils.js";
 

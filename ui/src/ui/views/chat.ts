@@ -13,6 +13,8 @@ import {
 } from "../chat/grouped-render";
 import { renderMarkdownSidebar } from "./markdown-sidebar";
 import "../components/resizable-divider";
+import "../components/agent/conversation.js";
+import "../components/agent/loader.js";
 
 export type CompactionIndicatorStatus = {
   active: boolean;
@@ -193,6 +195,11 @@ export function renderChat(props: ChatProps) {
 
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
+  const hasMessages =
+    (Array.isArray(props.messages) ? props.messages.length : 0) > 0 ||
+    (Array.isArray(props.toolMessages) ? props.toolMessages.length : 0) > 0 ||
+    props.stream !== null;
+  const showEmpty = !props.loading && !hasMessages;
   const thread = html`
     <div
       class="chat-thread"
@@ -200,42 +207,47 @@ export function renderChat(props: ChatProps) {
       aria-live="polite"
       @scroll=${props.onChatScroll}
     >
+      ${props.loading ? html`<agent-loader size="24"></agent-loader>` : nothing}
       ${
-        props.loading
+        showEmpty
           ? html`
-              <div class="muted">Loading chat…</div>
+              <agent-conversation-empty
+                title="Start a conversation"
+                description="Type a message below or connect to the gateway to begin."
+              ></agent-conversation-empty>
             `
           : nothing
       }
-      ${repeat(
-        buildChatItems(props),
-        (item) => item.key,
-        (item) => {
-          if (item.kind === "reading-indicator") {
-            return renderReadingIndicatorGroup(assistantIdentity);
-          }
-
-          if (item.kind === "stream") {
-            return renderStreamingGroup(
-              item.text,
-              item.startedAt,
-              props.onOpenSidebar,
-              assistantIdentity,
-            );
-          }
-
-          if (item.kind === "group") {
-            return renderMessageGroup(item, {
-              onOpenSidebar: props.onOpenSidebar,
-              showReasoning,
-              assistantName: props.assistantName,
-              assistantAvatar: assistantIdentity.avatar,
-            });
-          }
-
-          return nothing;
-        },
-      )}
+      ${
+        !props.loading && !showEmpty
+          ? repeat(
+              buildChatItems(props),
+              (item) => item.key,
+              (item) => {
+                if (item.kind === "reading-indicator") {
+                  return renderReadingIndicatorGroup(assistantIdentity);
+                }
+                if (item.kind === "stream") {
+                  return renderStreamingGroup(
+                    item.text,
+                    item.startedAt,
+                    props.onOpenSidebar,
+                    assistantIdentity,
+                  );
+                }
+                if (item.kind === "group") {
+                  return renderMessageGroup(item, {
+                    onOpenSidebar: props.onOpenSidebar,
+                    showReasoning,
+                    assistantName: props.assistantName,
+                    assistantAvatar: assistantIdentity.avatar,
+                  });
+                }
+                return nothing;
+              },
+            )
+          : nothing
+      }
     </div>
   `;
 
@@ -312,7 +324,7 @@ export function renderChat(props: ChatProps) {
                         }
                       </div>
                       <button
-                        class="btn chat-queue__remove"
+                        class="btn btn-ghost btn-sm chat-queue__remove"
                         type="button"
                         aria-label="Remove queued message"
                         @click=${() => props.onQueueRemove(item.id)}
@@ -354,16 +366,18 @@ export function renderChat(props: ChatProps) {
               placeholder=${composePlaceholder}
             ></textarea>
           </label>
-          <div class="chat-compose__actions">
+          <div class="chat-compose__actions flex gap-2">
             <button
-              class="btn"
+              class="btn btn-ghost"
+              type="button"
               ?disabled=${!props.connected || (!canAbort && props.sending)}
               @click=${canAbort ? props.onAbort : props.onNewSession}
             >
               ${canAbort ? "Stop" : "New session"}
             </button>
             <button
-              class="btn primary"
+              class="btn btn-primary"
+              type="button"
               ?disabled=${!props.connected}
               @click=${props.onSend}
             >

@@ -1,3 +1,5 @@
+declare const __OPENCLAW_VERSION__: string | undefined;
+
 import { loadChatHistory } from "./controllers/chat";
 import { loadDevices } from "./controllers/devices";
 import { loadNodes } from "./controllers/nodes";
@@ -117,6 +119,8 @@ export function connectGateway(host: GatewayHost) {
     token: host.settings.token.trim() ? host.settings.token : undefined,
     password: host.password.trim() ? host.password : undefined,
     clientName: "openclaw-control-ui",
+    clientVersion:
+      (typeof __OPENCLAW_VERSION__ === "string" && __OPENCLAW_VERSION__) || undefined,
     mode: "webchat",
     onHello: (hello) => {
       host.connected = true;

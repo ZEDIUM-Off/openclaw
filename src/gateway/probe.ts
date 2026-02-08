@@ -24,6 +24,13 @@ export type GatewayProbeResult = {
   status: unknown;
   presence: SystemPresence[] | null;
   configSnapshot: unknown;
+  kgmStatus?: {
+    enabled?: boolean;
+    provider?: string;
+    mode?: string;
+    connected?: boolean;
+    error?: string;
+  } | null;
 };
 
 function formatError(err: unknown): string {
@@ -73,21 +80,55 @@ export async function probeGateway(opts: {
       onHelloOk: async () => {
         connectLatencyMs = Date.now() - startedAt;
         try {
-          const [health, status, presence, configSnapshot] = await Promise.all([
-            client.request("health"),
-            client.request("status"),
-            client.request("system-presence"),
-            client.request("config.get", {}),
-          ]);
+          const [health, status, presence, configSnapshot, kgmStatusRaw] = await Promise.allSettled(
+            [
+              client.request("health"),
+              client.request("status"),
+              client.request("system-presence"),
+              client.request("config.get", {}),
+              client.request("kgm.admin.status", {}).catch(() => null), // best-effort KGM status
+            ],
+          );
+          const kgmStatus =
+            kgmStatusRaw.status === "fulfilled" &&
+            kgmStatusRaw.value &&
+            typeof kgmStatusRaw.value === "object"
+              ? {
+                  enabled:
+                    typeof kgmStatusRaw.value.enabled === "boolean"
+                      ? kgmStatusRaw.value.enabled
+                      : false,
+                  provider:
+                    typeof kgmStatusRaw.value.provider === "string"
+                      ? kgmStatusRaw.value.provider
+                      : undefined,
+                  mode:
+                    typeof kgmStatusRaw.value.mode === "string"
+                      ? kgmStatusRaw.value.mode
+                      : undefined,
+                  connected:
+                    typeof kgmStatusRaw.value.connected === "boolean"
+                      ? kgmStatusRaw.value.connected
+                      : undefined,
+                  error:
+                    typeof kgmStatusRaw.value.error === "string"
+                      ? kgmStatusRaw.value.error
+                      : undefined,
+                }
+              : null;
           settle({
             ok: true,
             connectLatencyMs,
             error: null,
             close,
-            health,
-            status,
-            presence: Array.isArray(presence) ? (presence as SystemPresence[]) : null,
-            configSnapshot,
+            health: health.status === "fulfilled" ? health.value : null,
+            status: status.status === "fulfilled" ? status.value : null,
+            presence:
+              presence.status === "fulfilled" && Array.isArray(presence.value)
+                ? (presence.value as SystemPresence[])
+                : null,
+            configSnapshot: configSnapshot.status === "fulfilled" ? configSnapshot.value : null,
+            kgmStatus,
           });
         } catch (err) {
           settle({
@@ -99,6 +140,7 @@ export async function probeGateway(opts: {
             status: null,
             presence: null,
             configSnapshot: null,
+            kgmStatus: null,
           });
         }
       },

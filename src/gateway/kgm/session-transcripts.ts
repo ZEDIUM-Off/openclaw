@@ -1,8 +1,9 @@
 import fs from "node:fs";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { SessionEntry } from "../../config/sessions/types.js";
 import type { KgmProvider } from "../../kgm/provider.js";
 import { resolveDefaultSessionStorePath } from "../../config/sessions/paths.js";
-import { loadSessionStore, type SessionEntry } from "../../config/sessions/store.js";
+import { loadSessionStore } from "../../config/sessions/store.js";
 import { resolveAgentScope } from "../../kgm/rbac.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
 import { onSessionTranscriptUpdate } from "../../sessions/transcript-events.js";

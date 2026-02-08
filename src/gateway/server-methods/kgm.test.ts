@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { KgmProvider } from "../../kgm/provider.js";
 import type { GatewayRequestContext } from "./types.js";
@@ -15,9 +15,13 @@ const configState: OpenClawConfig = {
   kgm: { enabled: true },
 };
 
-vi.mock("../../config/config.js", () => ({
-  loadConfig: () => configState,
-}));
+vi.mock("../../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/config.js")>();
+  return {
+    ...actual,
+    loadConfig: () => configState,
+  };
+});
 
 vi.mock("../kgm/kgm-client.js", () => ({
   requireKgmProvider: () => mocks.provider,

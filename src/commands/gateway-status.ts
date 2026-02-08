@@ -262,6 +262,7 @@ export async function gatewayStatusCommand(
             health: p.probe.health,
             summary: p.probe.status,
             presence: p.probe.presence,
+            kgm: p.probe.kgmStatus,
           })),
         },
         null,
@@ -281,6 +282,27 @@ export async function gatewayStatusCommand(
       : `${colorize(rich, theme.error, "Reachable")}: no`,
   );
   runtime.log(colorize(rich, theme.muted, `Probe budget: ${overallTimeoutMs}ms`));
+
+  // Display KGM status from the first reachable gateway
+  const firstWithKgm = reachable.find((p) => p.probe.kgmStatus);
+  if (firstWithKgm?.probe.kgmStatus) {
+    const kgm = firstWithKgm.probe.kgmStatus;
+    runtime.log("");
+    runtime.log(colorize(rich, theme.heading, "Knowledge Graph Memory (KGM)"));
+    const kgmStatus = kgm.enabled
+      ? kgm.connected
+        ? theme.success("enabled")
+        : theme.warn("enabled (disconnected)")
+      : theme.muted("disabled");
+    runtime.log(`Status: ${kgmStatus}`);
+    if (kgm.enabled) {
+      runtime.log(`Provider: ${kgm.provider ?? "unknown"}`);
+      runtime.log(`Mode: ${kgm.mode ?? "unknown"}`);
+      if (kgm.error) {
+        runtime.log(colorize(rich, theme.error, `Error: ${kgm.error}`));
+      }
+    }
+  }
 
   if (warnings.length > 0) {
     runtime.log("");

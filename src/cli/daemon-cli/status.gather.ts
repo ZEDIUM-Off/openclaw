@@ -91,6 +91,13 @@ export type DaemonStatus = {
     ok: boolean;
     error?: string;
     url?: string;
+    kgm?: {
+      enabled?: boolean;
+      provider?: string;
+      mode?: string;
+      connected?: boolean;
+      error?: string;
+    } | null;
   };
   extraServices: Array<{ label: string; detail: string; scope: string }>;
 };
@@ -269,7 +276,16 @@ export async function gatherDaemonStatus(
     port: portStatus,
     ...(portCliStatus ? { portCli: portCliStatus } : {}),
     lastError,
-    ...(rpc ? { rpc: { ...rpc, url: probeUrl } } : {}),
+    ...(rpc
+      ? {
+          rpc: {
+            ok: rpc.ok,
+            error: rpc.error,
+            url: probeUrl,
+            kgm: rpc.kgm,
+          },
+        }
+      : {}),
     extraServices,
   };
 }

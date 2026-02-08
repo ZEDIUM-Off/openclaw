@@ -1,12 +1,17 @@
 import type { DaemonLifecycleOptions } from "./types.js";
+import { loadConfig } from "../../config/config.js";
 import { resolveIsNixMode } from "../../config/paths.js";
 import { resolveGatewayService } from "../../daemon/service.js";
 import { renderSystemdUnavailableHints } from "../../daemon/systemd-hints.js";
 import { isSystemdUserServiceAvailable } from "../../daemon/systemd.js";
+import { autoStartMemgraphIfNeeded, autoStopMemgraphIfNeeded } from "../../infra/docker-manager.js";
 import { isWSL } from "../../infra/wsl.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { defaultRuntime } from "../../runtime.js";
 import { buildDaemonServiceSnapshot, createNullWriter, emitDaemonActionJson } from "./response.js";
 import { renderGatewayServiceStartHints } from "./shared.js";
+
+const gatewayLog = createSubsystemLogger("gateway");
 
 export async function runDaemonUninstall(opts: DaemonLifecycleOptions = {}) {
   const json = Boolean(opts.json);
@@ -141,6 +146,19 @@ export async function runDaemonStart(opts: DaemonLifecycleOptions = {}) {
     }
     return;
   }
+
+  // Start Memgraph if KGM is enabled before starting the service
+  const cfg = loadConfig();
+  if (cfg.kgm?.enabled) {
+    if (!json) {
+      defaultRuntime.log("KGM enabled, ensuring Memgraph is running...");
+    }
+    const memgraphStarted = await autoStartMemgraphIfNeeded({ kgmEnabled: true });
+    if (!memgraphStarted && !json) {
+      gatewayLog.warn("Failed to auto-start Memgraph; KGM may be unavailable");
+    }
+  }
+
   try {
     await service.restart({ env: process.env, stdout });
   } catch (err) {
@@ -216,6 +234,14 @@ export async function runDaemonStop(opts: DaemonLifecycleOptions = {}) {
   } catch (err) {
     fail(`Gateway stop failed: ${String(err)}`);
     return;
+  }
+
+  // Stop Memgraph when Gateway stops
+  gatewayLog.info("Stopping Memgraph...");
+  try {
+    await autoStopMemgraphIfNeeded();
+  } catch (err) {
+    gatewayLog.warn(`Failed to stop Memgraph: ${String(err)}`);
   }
 
   let stopped = false;

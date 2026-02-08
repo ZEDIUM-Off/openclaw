@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { KgmActor, KgmProvider } from "./provider.js";
 import { resolveAdminScope } from "./rbac.js";
 
@@ -9,8 +10,14 @@ type SchemaScript = {
   content: string;
 };
 
+/**
+ * Resolve path relative to the source file location (works with pnpm link)
+ */
 function resolveRepoRelative(p: string): string {
-  return path.resolve(process.cwd(), p);
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  // From src/kgm/schema.ts -> repo root
+  return path.resolve(__dirname, "../../", p);
 }
 
 async function loadCypherScript(relPath: string): Promise<SchemaScript> {
@@ -38,11 +45,26 @@ async function execScript(params: {
 }) {
   const statements = splitStatements(params.script.content);
   for (const statement of statements) {
-    await params.provider.query({
-      actor: params.actor,
-      scope: params.scope,
-      cypher: statement,
-    });
+    try {
+      await params.provider.query({
+        actor: params.actor,
+        scope: params.scope,
+        cypher: statement,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      // Ignore errors for constraints/indexes/nodes that already exist
+      if (
+        message.includes("already exists") ||
+        message.includes("Constraint already exists") ||
+        message.includes("Index already exists") ||
+        message.includes("unique constraint violation") ||
+        message.includes("equivalent index already exists")
+      ) {
+        continue;
+      }
+      throw err;
+    }
   }
 }
 

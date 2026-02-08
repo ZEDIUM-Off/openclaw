@@ -35,6 +35,7 @@ export type GatewaySessionRow = {
   outputTokens?: number;
   totalTokens?: number;
   responseUsage?: "on" | "off" | "tokens" | "full";
+  groupActivation?: "mention" | "always";
   modelProvider?: string;
   model?: string;
   contextTokens?: number;

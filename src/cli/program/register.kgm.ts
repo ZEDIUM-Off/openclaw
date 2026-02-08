@@ -3,7 +3,7 @@ import { kgmEnsureAgentCommand, kgmInitCommand, kgmStatusCommand } from "../../c
 import { defaultRuntime } from "../../runtime.js";
 import { theme } from "../../terminal/theme.js";
 import { runCommandWithRuntime } from "../cli-utils.js";
-import { formatHelpExamples } from "../help.js";
+import { formatHelpExamples } from "../help-format.js";
 
 export function registerKgmCommands(program: Command) {
   const kgm = program.command("kgm").description("Knowledge Graph Memory (KGM) commands");

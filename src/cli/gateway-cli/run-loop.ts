@@ -1,5 +1,6 @@
 import type { startGatewayServer } from "../../gateway/server.js";
 import type { defaultRuntime } from "../../runtime.js";
+import { autoStopMemgraphIfNeeded } from "../../infra/docker-manager.js";
 import { acquireGatewayLock } from "../../infra/gateway-lock.js";
 import {
   consumeGatewaySigusr1RestartAuthorization,
@@ -52,6 +53,17 @@ export async function runGatewayLoop(params: {
       } finally {
         clearTimeout(forceExitTimer);
         server = null;
+
+        // Stop Memgraph on full shutdown (not restart)
+        if (!isRestart) {
+          gatewayLog.info("Stopping Memgraph...");
+          try {
+            await autoStopMemgraphIfNeeded();
+          } catch (err) {
+            gatewayLog.warn(`Failed to stop Memgraph: ${String(err)}`);
+          }
+        }
+
         if (isRestart) {
           shuttingDown = false;
           restartResolver?.();

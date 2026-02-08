@@ -18,7 +18,7 @@ export async function kgmStatusCommand(runtime: RuntimeEnv, opts?: { json?: bool
     runtime.log(JSON.stringify(result ?? {}, null, 2));
     return;
   }
-  const enabled = result?.enabled ? theme.good("enabled") : theme.muted("disabled");
+  const enabled = result?.enabled ? theme.success("enabled") : theme.muted("disabled");
   const provider = result?.provider ?? "none";
   runtime.log(`KGM: ${enabled} (${provider})`);
 }
@@ -33,7 +33,7 @@ export async function kgmInitCommand(runtime: RuntimeEnv, opts?: { json?: boolea
     runtime.log(JSON.stringify(result ?? {}, null, 2));
     return;
   }
-  runtime.log(result?.ok ? theme.good("KGM admin schema ready") : theme.warn("KGM init failed"));
+  runtime.log(result?.ok ? theme.success("KGM admin schema ready") : theme.warn("KGM init failed"));
 }
 
 export async function kgmEnsureAgentCommand(
@@ -51,6 +51,6 @@ export async function kgmEnsureAgentCommand(
   }
   const scope = result?.scope ? ` (${result.scope})` : "";
   runtime.log(
-    result?.ok ? theme.good(`KGM agent schema ready${scope}`) : theme.warn("KGM ensure failed"),
+    result?.ok ? theme.success(`KGM agent schema ready${scope}`) : theme.warn("KGM ensure failed"),
   );
 }

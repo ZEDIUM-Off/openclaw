@@ -201,6 +201,26 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
         defaultRuntime.error(`  ${errorText(line)}`);
       }
     }
+
+    // Display KGM status if available
+    if (rpc.kgm) {
+      spacer();
+      defaultRuntime.log(colorize(rich, theme.heading, "Knowledge Graph Memory (KGM)"));
+      const kgmStatus = rpc.kgm.enabled
+        ? rpc.kgm.connected
+          ? okText("enabled")
+          : warnText("enabled (disconnected)")
+        : theme.muted("disabled");
+      defaultRuntime.log(`${label("Status:")} ${kgmStatus}`);
+      if (rpc.kgm.enabled) {
+        defaultRuntime.log(`${label("Provider:")} ${infoText(rpc.kgm.provider ?? "unknown")}`);
+        defaultRuntime.log(`${label("Mode:")} ${infoText(rpc.kgm.mode ?? "unknown")}`);
+        if (rpc.kgm.error) {
+          defaultRuntime.error(`${errorText("Error:")} ${rpc.kgm.error}`);
+        }
+      }
+    }
+
     spacer();
   }
 

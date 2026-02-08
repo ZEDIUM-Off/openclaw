@@ -176,15 +176,18 @@ export class MemgraphProvider implements KgmProvider {
   }
 
   async search(params: { actor: KgmActor; scope: string; query: string; limit?: number }) {
-    const limit = Math.max(1, params.limit ?? 20);
+    // Ensure limit is a valid integer (Memgraph requires integer type explicitly)
+    const limit = Math.max(1, Math.floor(params.limit ?? 20));
+    // Memgraph-compatible: use IS NOT NULL instead of exists()
+    // Note: Memgraph requires LIMIT to be an integer literal, not a parameter
     const cypher =
       "MATCH (n { scope: $scope }) " +
-      "WHERE (n.key CONTAINS $query) OR (exists(n.label) AND n.label CONTAINS $query) " +
+      "WHERE (n.key CONTAINS $query) OR (n.label IS NOT NULL AND n.label CONTAINS $query) " +
       "RETURN n.key AS key, labels(n)[0] AS label, n AS properties " +
-      "LIMIT $limit";
+      `LIMIT ${limit}`; // Embed limit as integer literal, not parameter
     const result = await this.runQuery({
       cypher,
-      params: { scope: params.scope, query: params.query, limit },
+      params: { scope: params.scope, query: params.query }, // Don't pass limit as param
     });
     return result.rows.map((row) => ({
       key: String(row.key ?? ""),

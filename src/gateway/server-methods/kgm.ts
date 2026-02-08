@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { KgmActor } from "../../kgm/provider.js";
-import type { GatewayRequestHandlers } from "./types.js";
+import type { GatewayRequestHandlers, RespondFn } from "./types.js";
 import { resolveAgentWorkspaceDir } from "../../agents/agent-scope.js";
 import {
   buildBootstrapContextFiles,
@@ -64,7 +64,7 @@ function resolveScope(actor: KgmActor, params: { scope?: unknown }) {
 }
 
 function ensureScopeAllowed(
-  respond: (ok: boolean, payload?: unknown, error?: unknown) => void,
+  respond: RespondFn,
   params: {
     actor: KgmActor;
     scope?: string;
@@ -97,7 +97,7 @@ const GROUP_DOC_DENYLIST = new Set([
 ]);
 
 export const kgmHandlers: GatewayRequestHandlers = {
-  "kgm.admin.status": ({ params, respond }) => {
+  "kgm.admin.status": async ({ params, respond }) => {
     if (!validateKgmAdminStatusParams(params)) {
       respond(
         false,
@@ -111,9 +111,38 @@ export const kgmHandlers: GatewayRequestHandlers = {
     }
     const cfg = loadConfig();
     const provider = resolveKgmProvider(cfg);
+    const enabled = cfg.kgm?.enabled === true;
+    const mode = cfg.kgm?.mode ?? "fs+kgm";
+
+    // Test connection if provider exists
+    let connected = false;
+    let error: string | undefined;
+    if (provider) {
+      try {
+        // Simple ping query to test connection
+        await provider.query({
+          actor: buildOperatorActor(),
+          scope: resolveAdminScope(),
+          cypher: "RETURN 1 as ping",
+          params: {},
+        });
+        connected = true;
+      } catch (err) {
+        connected = false;
+        error = err instanceof Error ? err.message : String(err);
+      }
+    }
+
     respond(
       true,
-      { ok: true, enabled: Boolean(provider), provider: provider?.id ?? "none" },
+      {
+        ok: true,
+        enabled,
+        mode,
+        provider: provider?.id ?? "none",
+        connected,
+        ...(error ? { error } : {}),
+      },
       undefined,
     );
   },
@@ -171,8 +200,12 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
-    const observed = await provider.describeSchema({ actor, scope });
-    const expectedScript = scope.startsWith("agent:")
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
+    const observed = await provider.describeSchema({ actor, scope: safeScope });
+    const expectedScript = safeScope.startsWith("agent:")
       ? "docker/memgraph/init/03-schema-agent.cypherl"
       : "docker/memgraph/init/02-schema-admin.cypherl";
     let registry: Record<string, unknown> | undefined;
@@ -185,7 +218,7 @@ export const kgmHandlers: GatewayRequestHandlers = {
           "MATCH (g:GraphSchema { scope: $adminScope })-[:APPLIES_TO { scope: $adminScope }]->" +
           "(s:Scope { id: $scopeId, scope: $adminScope }) " +
           "RETURN g.name AS name, g.version AS version, g.hash AS hash, g.appliesToKind AS appliesToKind, g.path AS path",
-        params: { adminScope, scopeId: scope.startsWith("agent:") ? "agent" : "admin" },
+        params: { adminScope, scopeId: safeScope.startsWith("agent:") ? "agent" : "admin" },
       });
       const row = registryQuery.rows[0];
       if (row) {
@@ -232,9 +265,13 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const results = await provider.search({
       actor,
-      scope,
+      scope: safeScope,
       query: params.query,
       limit: params.limit,
     });
@@ -259,12 +296,16 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const result = await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MATCH (n { scope: $scope, key: $key }) RETURN labels(n)[0] AS label, n AS node LIMIT 1",
-      params: { scope, key: params.key },
+      params: { scope: safeScope, key: params.key },
     });
     const row = result.rows[0];
     if (!row) {
@@ -292,9 +333,13 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const node = await provider.upsertNode({
       actor,
-      scope,
+      scope: safeScope,
       label: params.label,
       key: params.key,
       properties: params.properties as Record<string, unknown> | undefined,
@@ -320,9 +365,13 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const edge = await provider.upsertEdge({
       actor,
-      scope,
+      scope: safeScope,
       type: params.type,
       from: { key: params.fromKey, label: params.fromLabel },
       to: { key: params.toKey, label: params.toLabel },
@@ -349,9 +398,13 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const edge = await provider.upsertEdge({
       actor,
-      scope,
+      scope: safeScope,
       type: params.type,
       from: { key: params.fromKey, label: params.fromLabel },
       to: { key: params.toKey, label: params.toLabel },
@@ -378,14 +431,18 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const pinned = params.pinned !== false;
     await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MATCH (n { scope: $scope, key: $key }) " +
         "SET n.pinnedAt = $pinnedAt RETURN n.key AS key",
-      params: { scope, key: params.key, pinnedAt: pinned ? Date.now() : null },
+      params: { scope: safeScope, key: params.key, pinnedAt: pinned ? Date.now() : null },
     });
     respond(true, { ok: true }, undefined);
   },
@@ -408,7 +465,11 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
-    await provider.touch({ actor, scope, keys: params.keys });
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
+    await provider.touch({ actor, scope: safeScope, keys: params.keys });
     respond(true, { ok: true }, undefined);
   },
   "kgm.agent.gc": async ({ params, respond }) => {
@@ -430,10 +491,14 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const minWeight = params.minWeight ?? cfg.kgm?.decay?.minWeight ?? DEFAULT_DECAY.minWeight;
     const maxNodes =
       params.maxNodes ?? cfg.kgm?.decay?.maxNodesPerScope ?? DEFAULT_DECAY.maxNodesPerScope;
-    const result = await provider.gc({ actor, scope, minWeight, maxNodes });
+    const result = await provider.gc({ actor, scope: safeScope, minWeight, maxNodes });
     respond(true, { ok: true, removed: result.removed }, undefined);
   },
   "kgm.agent.ensureSchema": async ({ params, respond }) => {
@@ -483,15 +548,19 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
-    const contextKey = resolveContextSetKey(scope);
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
+    const contextKey = resolveContextSetKey(safeScope);
     const result = await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MATCH (cs:ContextSet { key: $contextKey, scope: $scope })-[:INCLUDES]->(ci:ContextItem) " +
         "RETURN ci.key AS key, ci.kind AS kind, ci.refType AS refType, ci.refKey AS refKey, ci.createdAt AS createdAt " +
         "ORDER BY ci.createdAt DESC",
-      params: { scope, contextKey },
+      params: { scope: safeScope, contextKey },
     });
     respond(true, { ok: true, items: result.rows }, undefined);
   },
@@ -514,15 +583,19 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
-    const contextKey = resolveContextSetKey(scope);
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
+    const contextKey = resolveContextSetKey(safeScope);
     const now = Date.now();
     await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MERGE (cs:ContextSet { key: $contextKey, scope: $scope }) " +
         "SET cs.updatedAt = $now, cs.agentId = $agentId",
-      params: { scope, contextKey, now, agentId: actor.agentId ?? null },
+      params: { scope: safeScope, contextKey, now, agentId: actor.agentId ?? null },
     });
 
     const addNodes = Array.isArray(params.addNodes)
@@ -542,7 +615,7 @@ export const kgmHandlers: GatewayRequestHandlers = {
       const items = buildContextItemKeys({ kind: "node", keys: addNodes });
       await provider.query({
         actor,
-        scope,
+        scope: safeScope,
         cypher:
           "UNWIND $items AS item " +
           "MERGE (ci:ContextItem { key: item.key, scope: $scope }) " +
@@ -551,14 +624,14 @@ export const kgmHandlers: GatewayRequestHandlers = {
           "WITH ci " +
           "MATCH (cs:ContextSet { key: $contextKey, scope: $scope }) " +
           "MERGE (cs)-[:INCLUDES { scope: $scope }]->(ci)",
-        params: { scope, contextKey, items, now },
+        params: { scope: safeScope, contextKey, items, now },
       });
     }
     if (addMessages.length > 0) {
       const items = buildContextItemKeys({ kind: "message", keys: addMessages });
       await provider.query({
         actor,
-        scope,
+        scope: safeScope,
         cypher:
           "UNWIND $items AS item " +
           "MERGE (ci:ContextItem { key: item.key, scope: $scope }) " +
@@ -567,7 +640,7 @@ export const kgmHandlers: GatewayRequestHandlers = {
           "WITH ci " +
           "MATCH (cs:ContextSet { key: $contextKey, scope: $scope }) " +
           "MERGE (cs)-[:INCLUDES { scope: $scope }]->(ci)",
-        params: { scope, contextKey, items, now },
+        params: { scope: safeScope, contextKey, items, now },
       });
     }
     if (removeNodes.length > 0) {
@@ -576,11 +649,11 @@ export const kgmHandlers: GatewayRequestHandlers = {
       );
       await provider.query({
         actor,
-        scope,
+        scope: safeScope,
         cypher:
           "UNWIND $keys AS key " +
           "MATCH (ci:ContextItem { key: key, scope: $scope }) DETACH DELETE ci",
-        params: { scope, keys: items },
+        params: { scope: safeScope, keys: items },
       });
     }
     if (removeMessages.length > 0) {
@@ -589,11 +662,11 @@ export const kgmHandlers: GatewayRequestHandlers = {
       );
       await provider.query({
         actor,
-        scope,
+        scope: safeScope,
         cypher:
           "UNWIND $keys AS key " +
           "MATCH (ci:ContextItem { key: key, scope: $scope }) DETACH DELETE ci",
-        params: { scope, keys: items },
+        params: { scope: safeScope, keys: items },
       });
     }
     respond(true, { ok: true }, undefined);
@@ -617,6 +690,10 @@ export const kgmHandlers: GatewayRequestHandlers = {
     if (!ensureScopeAllowed(respond, { actor, scope })) {
       return;
     }
+    if (!scope) {
+      return;
+    }
+    const safeScope = scope;
     const maxNodes =
       typeof params.maxNodes === "number" && Number.isFinite(params.maxNodes)
         ? Math.max(1, Math.floor(params.maxNodes))
@@ -625,24 +702,24 @@ export const kgmHandlers: GatewayRequestHandlers = {
       typeof params.maxMessages === "number" && Number.isFinite(params.maxMessages)
         ? Math.max(1, Math.floor(params.maxMessages))
         : 10;
-    const contextKey = resolveContextSetKey(scope);
+    const contextKey = resolveContextSetKey(safeScope);
     const nodes = await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MATCH (cs:ContextSet { key: $contextKey, scope: $scope })-[:INCLUDES]->(ci:ContextItem { kind: 'node' }) " +
         "RETURN ci.refKey AS refKey, ci.createdAt AS createdAt " +
         "ORDER BY ci.createdAt DESC LIMIT $limit",
-      params: { scope, contextKey, limit: maxNodes },
+      params: { scope: safeScope, contextKey, limit: maxNodes },
     });
     const messages = await provider.query({
       actor,
-      scope,
+      scope: safeScope,
       cypher:
         "MATCH (cs:ContextSet { key: $contextKey, scope: $scope })-[:INCLUDES]->(ci:ContextItem { kind: 'message' }) " +
         "RETURN ci.refKey AS refKey, ci.createdAt AS createdAt " +
         "ORDER BY ci.createdAt DESC LIMIT $limit",
-      params: { scope, contextKey, limit: maxMessages },
+      params: { scope: safeScope, contextKey, limit: maxMessages },
     });
 
     const messageKeys = messages.rows.map((row) => String(row.refKey ?? "")).filter(Boolean);
@@ -650,13 +727,13 @@ export const kgmHandlers: GatewayRequestHandlers = {
       messageKeys.length > 0
         ? await provider.query({
             actor,
-            scope,
+            scope: safeScope,
             cypher:
               "MATCH (m:Message { scope: $scope }) " +
               "WHERE m.key IN $keys " +
               "RETURN m.key AS key, m.preview AS preview, m.role AS role, m.sessionKey AS sessionKey, " +
               "m.sessionId AS sessionId, m.entryId AS entryId",
-            params: { scope, keys: messageKeys },
+            params: { scope: safeScope, keys: messageKeys },
           })
         : { rows: [] };
 
@@ -729,15 +806,15 @@ export const kgmHandlers: GatewayRequestHandlers = {
             rawText.length > MAX_MATERIALIZED_MESSAGE_CHARS
               ? `${rawText.slice(0, MAX_MATERIALIZED_MESSAGE_CHARS - 3)}...`
               : rawText;
-          const role = detail.role ? ` (${detail.role})` : "";
-          const scopeHint = detail.sessionKey ? ` [${detail.sessionKey}]` : "";
+          const role = detail?.role ? ` (${detail.role})` : "";
+          const scopeHint = detail?.sessionKey ? ` [${detail.sessionKey}]` : "";
           return `- ${key}${role}${scopeHint}: ${text}`;
         }),
       );
     }
     let docsSectionIncluded = false;
     const sessionKey = params.sessionKey ?? actor.sessionKey;
-    const agentId = scope.split(":")[1] ?? actor.agentId;
+    const agentId = safeScope.split(":")[1] ?? actor.agentId;
     if (agentId) {
       try {
         const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
@@ -774,7 +851,7 @@ export const kgmHandlers: GatewayRequestHandlers = {
             contextDocs.find((doc) => doc.path === file.name)?.content ?? file.content.trim();
           await provider.upsertNode({
             actor,
-            scope,
+            scope: safeScope,
             label: "AgentDoc",
             key: `agentdoc:${file.name}`,
             properties: {

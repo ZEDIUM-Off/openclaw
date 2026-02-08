@@ -1,7 +1,7 @@
 import type { OpenClawConfig } from "../../config/config.js";
 import type { KgmProvider } from "../../kgm/provider.js";
 import type { GatewayAgentRow } from "../session-utils.types.js";
-import { resolveAdminScope } from "../../kgm/rbac.js";
+import { resolveAdminScope, resolveAgentScope } from "../../kgm/rbac.js";
 import { resolveKgmProvider } from "./kgm-client.js";
 
 type KgmLogger = { warn: (msg: string) => void };
@@ -107,58 +107,35 @@ export async function readNodesFromKgm(params: {
     const result = await provider.query({
       actor,
       scope,
-      cypher: "MATCH (n:Node { scope: $scope }) RETURN n AS node",
+      cypher:
+        "MATCH (n:Node { scope: $scope }) " +
+        "RETURN n.id AS nodeId, n.displayName AS displayName, n.platform AS platform, " +
+        "n.version AS version, n.coreVersion AS coreVersion, n.uiVersion AS uiVersion, " +
+        "n.deviceFamily AS deviceFamily, n.modelIdentifier AS modelIdentifier, " +
+        "n.remoteIp AS remoteIp, n.caps AS caps, n.commands AS commands, " +
+        "n.connectedAtMs AS connectedAtMs, n.paired AS paired, n.connected AS connected " +
+        "ORDER BY n.id",
       params: { scope },
     });
     const nodes: NodeListEntry[] = result.rows
-      .map((row) => {
-        const node = row.node as Record<string, unknown> | undefined;
-        if (!node || typeof node !== "object") {
-          return null;
-        }
-        const nodeId = typeof node.id === "string" ? node.id : String(node.key ?? "");
-        if (!nodeId) {
-          return null;
-        }
-        return {
-          nodeId,
-          displayName: typeof node.displayName === "string" ? node.displayName : undefined,
-          platform: typeof node.platform === "string" ? node.platform : undefined,
-          version: typeof node.version === "string" ? node.version : undefined,
-          coreVersion: typeof node.coreVersion === "string" ? node.coreVersion : undefined,
-          uiVersion: typeof node.uiVersion === "string" ? node.uiVersion : undefined,
-          deviceFamily: typeof node.deviceFamily === "string" ? node.deviceFamily : undefined,
-          modelIdentifier:
-            typeof node.modelIdentifier === "string" ? node.modelIdentifier : undefined,
-          remoteIp: typeof node.remoteIp === "string" ? node.remoteIp : undefined,
-          caps: Array.isArray(node.caps) ? (node.caps as string[]) : [],
-          commands: Array.isArray(node.commands) ? (node.commands as string[]) : [],
-          pathEnv: typeof node.pathEnv === "string" ? node.pathEnv : undefined,
-          permissions: Array.isArray(node.permissions) ? (node.permissions as string[]) : undefined,
-          connectedAtMs: typeof node.connectedAtMs === "number" ? node.connectedAtMs : undefined,
-          paired: typeof node.paired === "boolean" ? node.paired : undefined,
-          connected: typeof node.connected === "boolean" ? node.connected : undefined,
-        };
-      })
-      .filter((entry): entry is NodeListEntry => Boolean(entry && entry.nodeId));
-    if (nodes.length === 0) {
-      return null;
-    }
-    nodes.sort((a, b) => {
-      if (a.connected !== b.connected) {
-        return a.connected ? -1 : 1;
-      }
-      const an = (a.displayName ?? a.nodeId).toLowerCase();
-      const bn = (b.displayName ?? b.nodeId).toLowerCase();
-      if (an < bn) {
-        return -1;
-      }
-      if (an > bn) {
-        return 1;
-      }
-      return a.nodeId.localeCompare(b.nodeId);
-    });
-    return nodes;
+      .map((row) => ({
+        nodeId: String(row.nodeId ?? ""),
+        displayName: row.displayName ? String(row.displayName) : undefined,
+        platform: row.platform ? String(row.platform) : undefined,
+        version: row.version ? String(row.version) : undefined,
+        coreVersion: row.coreVersion ? String(row.coreVersion) : undefined,
+        uiVersion: row.uiVersion ? String(row.uiVersion) : undefined,
+        deviceFamily: row.deviceFamily ? String(row.deviceFamily) : undefined,
+        modelIdentifier: row.modelIdentifier ? String(row.modelIdentifier) : undefined,
+        remoteIp: row.remoteIp ? String(row.remoteIp) : undefined,
+        caps: Array.isArray(row.caps) ? row.caps.map(String) : undefined,
+        commands: Array.isArray(row.commands) ? row.commands.map(String) : undefined,
+        connectedAtMs: row.connectedAtMs ? Number(row.connectedAtMs) : undefined,
+        paired: row.paired ? Boolean(row.paired) : undefined,
+        connected: row.connected ? Boolean(row.connected) : undefined,
+      }))
+      .filter((row) => row.nodeId);
+    return nodes.length > 0 ? nodes : null;
   } catch (err) {
     params.log?.warn(`kgm nodes read failed: ${String(err)}`);
     return null;
@@ -317,5 +294,160 @@ export async function mirrorNodesToKgm(params: {
     }
   } catch (err) {
     params.log?.warn(`kgm nodes mirror failed: ${String(err)}`);
+  }
+}
+
+// Types for agent file reading from KGM
+export type AgentDocEntry = {
+  docType: string;
+  hash: string;
+  updatedAt: number;
+  sourcePath?: string;
+  size?: number;
+  raw?: string;
+};
+
+export type AgentFileEntry = {
+  name: string;
+  path: string;
+  missing: boolean;
+  size?: number;
+  updatedAtMs?: number;
+  content?: string;
+};
+
+/**
+ * Read agent docs from KGM (for kgm-primary mode)
+ * Returns null if KGM is not in kgm-primary mode or on error
+ */
+export async function readAgentDocsFromKgm(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  provider?: KgmProvider;
+  log?: KgmLogger;
+}): Promise<AgentDocEntry[] | null> {
+  const provider = resolveReadProvider(params.cfg, params.provider);
+  if (!provider) {
+    return null;
+  }
+
+  const scope = resolveAgentScope(params.agentId);
+  const actor = { role: "system" as const, agentId: params.agentId };
+
+  try {
+    const result = await provider.query({
+      actor,
+      scope,
+      cypher:
+        "MATCH (d:AgentDoc { scope: $scope }) " +
+        "RETURN d.docType AS docType, d.hash AS hash, d.updatedAt AS updatedAt, " +
+        "d.sourcePath AS sourcePath, d.size AS size, d.raw AS raw " +
+        "ORDER BY d.docType",
+      params: { scope },
+    });
+
+    const docs: AgentDocEntry[] = result.rows
+      .map((row) => ({
+        docType: String(row.docType ?? ""),
+        hash: String(row.hash ?? ""),
+        updatedAt: Number(row.updatedAt ?? 0),
+        sourcePath: row.sourcePath ? String(row.sourcePath) : undefined,
+        size: row.size ? Number(row.size) : undefined,
+        raw: row.raw ? String(row.raw) : undefined,
+      }))
+      .filter((doc) => doc.docType && doc.hash);
+
+    return docs.length > 0 ? docs : null;
+  } catch (err) {
+    params.log?.warn(`kgm agent docs read failed: ${String(err)}`);
+    return null;
+  }
+}
+
+/**
+ * Read agent files list from KGM (for kgm-primary mode)
+ * This reconstructs the file list from AgentDoc nodes
+ */
+export async function readAgentFilesFromKgm(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  workspaceDir: string;
+  provider?: KgmProvider;
+  log?: KgmLogger;
+}): Promise<AgentFileEntry[] | null> {
+  const provider = resolveReadProvider(params.cfg, params.provider);
+  if (!provider) {
+    return null;
+  }
+
+  const docs = await readAgentDocsFromKgm({
+    cfg: params.cfg,
+    agentId: params.agentId,
+    provider,
+    log: params.log,
+  });
+
+  if (!docs || docs.length === 0) {
+    return null;
+  }
+
+  // Convert AgentDoc entries to AgentFileEntry format
+  return docs.map((doc) => ({
+    name: doc.docType,
+    path: doc.sourcePath || `${params.workspaceDir}/${doc.docType}`,
+    missing: false,
+    size: doc.size ?? 0,
+    updatedAtMs: doc.updatedAt,
+    content: doc.raw,
+  }));
+}
+
+/**
+ * Read a specific agent file from KGM (for kgm-primary mode)
+ */
+export async function readAgentFileFromKgm(params: {
+  cfg: OpenClawConfig;
+  agentId: string;
+  fileName: string;
+  provider?: KgmProvider;
+  log?: KgmLogger;
+}): Promise<{ content: string; updatedAtMs: number } | null> {
+  const provider = resolveReadProvider(params.cfg, params.provider);
+  if (!provider) {
+    return null;
+  }
+
+  const scope = resolveAgentScope(params.agentId);
+  const actor = { role: "system" as const, agentId: params.agentId };
+
+  try {
+    const result = await provider.query({
+      actor,
+      scope,
+      cypher:
+        "MATCH (d:AgentDoc { scope: $scope, docType: $docType }) " +
+        "RETURN d.raw AS raw, d.updatedAt AS updatedAt, d.size AS size",
+      params: { scope, docType: params.fileName },
+    });
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+    const raw = row.raw ? String(row.raw) : "";
+    const updatedAt = Number(row.updatedAt ?? 0);
+
+    if (!raw) {
+      return null;
+    }
+
+    return {
+      content: raw,
+      updatedAtMs: updatedAt,
+    };
+  } catch (err) {
+    params.log?.warn(`kgm agent file read failed: ${String(err)}`);
+    return null;
   }
 }

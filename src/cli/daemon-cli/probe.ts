@@ -1,5 +1,4 @@
-import { callGateway } from "../../gateway/call.js";
-import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../utils/message-channel.js";
+import { probeGateway } from "../../gateway/probe.js";
 import { withProgress } from "../progress.js";
 
 export async function probeGatewayStatus(opts: {
@@ -11,29 +10,33 @@ export async function probeGatewayStatus(opts: {
   configPath?: string;
 }) {
   try {
-    await withProgress(
+    const result = await withProgress(
       {
         label: "Checking gateway status...",
         indeterminate: true,
         enabled: opts.json !== true,
       },
       async () =>
-        await callGateway({
+        await probeGateway({
           url: opts.url,
-          token: opts.token,
-          password: opts.password,
-          method: "status",
+          auth: {
+            token: opts.token,
+            password: opts.password,
+          },
           timeoutMs: opts.timeoutMs,
-          clientName: GATEWAY_CLIENT_NAMES.CLI,
-          mode: GATEWAY_CLIENT_MODES.CLI,
-          ...(opts.configPath ? { configPath: opts.configPath } : {}),
         }),
     );
-    return { ok: true } as const;
+
+    return {
+      ok: result.ok,
+      error: result.error ?? undefined,
+      kgm: result.kgmStatus,
+    } as const;
   } catch (err) {
     return {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
+      kgm: null,
     } as const;
   }
 }

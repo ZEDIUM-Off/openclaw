@@ -15,7 +15,12 @@ import {
 } from "../../agents/workspace.js";
 import { loadConfig } from "../../config/config.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
-import { mirrorAgentsToKgm, readAgentsFromKgm } from "../kgm/kgm-config-store.js";
+import {
+  mirrorAgentsToKgm,
+  readAgentsFromKgm,
+  readAgentFilesFromKgm,
+  readAgentFileFromKgm,
+} from "../kgm/kgm-config-store.js";
 import {
   ErrorCodes,
   errorShape,
@@ -140,6 +145,31 @@ export const agentsHandlers: GatewayRequestHandlers = {
 
     const cfg = loadConfig();
     const base = listAgentsForGateway(cfg);
+
+    // In kgm-primary mode, read from KGM first, fallback to FS
+    const kgmMode = cfg.kgm?.mode ?? "fs+kgm";
+    if (kgmMode === "kgm-primary") {
+      const agents = await readAgentsFromKgm({ cfg, log: context.logGateway });
+      if (agents && agents.length > 0) {
+        respond(
+          true,
+          {
+            defaultId: base.defaultId,
+            mainKey: base.mainKey,
+            scope: base.scope,
+            agents,
+            source: "kgm",
+          },
+          undefined,
+        );
+        return;
+      }
+      // Fallback to FS if KGM empty
+      respond(true, { ...base, source: "fs" }, undefined);
+      return;
+    }
+
+    // fs+kgm mode: FS is primary, KGM is mirror
     const agents = await readAgentsFromKgm({ cfg, log: context.logGateway });
     if (agents && agents.length > 0) {
       respond(
@@ -149,15 +179,16 @@ export const agentsHandlers: GatewayRequestHandlers = {
           mainKey: base.mainKey,
           scope: base.scope,
           agents,
+          source: "kgm",
         },
         undefined,
       );
       return;
     }
     void mirrorAgentsToKgm({ cfg, agents: base.agents, log: context.logGateway });
-    respond(true, base, undefined);
+    respond(true, { ...base, source: "fs" }, undefined);
   },
-  "agents.files.list": async ({ params, respond }) => {
+  "agents.files.list": async ({ params, respond, context }) => {
     if (!validateAgentsFilesListParams(params)) {
       respond(
         false,
@@ -178,10 +209,27 @@ export const agentsHandlers: GatewayRequestHandlers = {
       return;
     }
     const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+
+    // Try KGM first in kgm-primary mode, fallback to FS
+    const kgmFiles = await readAgentFilesFromKgm({
+      cfg,
+      agentId,
+      workspaceDir,
+      log: context.logGateway,
+    });
+    if (kgmFiles && kgmFiles.length > 0) {
+      respond(
+        true,
+        { agentId, workspace: workspaceDir, files: kgmFiles, source: "kgm" },
+        undefined,
+      );
+      return;
+    }
+
     const files = await listAgentFiles(workspaceDir);
-    respond(true, { agentId, workspace: workspaceDir, files }, undefined);
+    respond(true, { agentId, workspace: workspaceDir, files, source: "fs" }, undefined);
   },
-  "agents.files.get": async ({ params, respond }) => {
+  "agents.files.get": async ({ params, respond, context }) => {
     if (!validateAgentsFilesGetParams(params)) {
       respond(
         false,
@@ -211,6 +259,35 @@ export const agentsHandlers: GatewayRequestHandlers = {
       return;
     }
     const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+
+    // Try KGM first in kgm-primary mode, fallback to FS
+    const kgmFile = await readAgentFileFromKgm({
+      cfg,
+      agentId,
+      fileName: name,
+      log: context.logGateway,
+    });
+    if (kgmFile) {
+      respond(
+        true,
+        {
+          agentId,
+          workspace: workspaceDir,
+          file: {
+            name,
+            path: `${workspaceDir}/${name}`,
+            missing: false,
+            size: kgmFile.content.length,
+            updatedAtMs: kgmFile.updatedAtMs,
+            content: kgmFile.content,
+          },
+          source: "kgm",
+        },
+        undefined,
+      );
+      return;
+    }
+
     const filePath = path.join(workspaceDir, name);
     const meta = await statFile(filePath);
     if (!meta) {
@@ -220,6 +297,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
           agentId,
           workspace: workspaceDir,
           file: { name, path: filePath, missing: true },
+          source: "fs",
         },
         undefined,
       );
@@ -239,6 +317,7 @@ export const agentsHandlers: GatewayRequestHandlers = {
           updatedAtMs: meta.updatedAtMs,
           content,
         },
+        source: "fs",
       },
       undefined,
     );

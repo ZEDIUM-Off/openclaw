@@ -381,7 +381,7 @@ export function createSessionsRelayTool(opts?: {
       }
 
       const idempotencyKey = crypto.randomUUID();
-      let runId = idempotencyKey;
+      let runId: string = idempotencyKey;
       try {
         const response = await callGateway<{ runId?: string }>({
           method: "agent",

@@ -30,10 +30,10 @@ export async function resolveMemgraphComposePath(): Promise<string> {
 
   // Possible paths relative to the source file location
   const possiblePaths = [
-    // From src/infra/docker-manager.ts -> repo root
+    // From dist/ (bundled output) -> repo root
+    path.resolve(__dirname, "../docker/memgraph/docker-compose.yml"),
+    // From src/infra/ (source location during dev with pnpm openclaw)
     path.resolve(__dirname, "../../docker/memgraph/docker-compose.yml"),
-    // From dist/infra/docker-manager.js -> repo root
-    path.resolve(__dirname, "../../../docker/memgraph/docker-compose.yml"),
     // Fallback: current working directory
     path.resolve(process.cwd(), "docker/memgraph/docker-compose.yml"),
     // Fallback: ~/.openclaw (user config dir)

@@ -1,55 +1,55 @@
 services:
-    memgraph:
-        image: memgraph/memgraph-mage:latest
-        container_name: openclaw-memgraph
-        ports:
-            - "7687:7687"
-            - "7444:7444"
-        volumes:
-            - mg_lib:/var/lib/memgraph
-            - mg_log:/var/log/memgraph
-            - ./docker/memgraph/init:/docker-entrypoint-initdb.d
-        environment:
-            MEMGRAPH_USER: memgraph
-            MEMGRAPH_PASSWORD: memgraph
-        command:
-            - "--log-level=INFO"
-            - "--schema-info-enabled=true"
-            - "--storage-enable-schema-metadata=true"
-            - "--audit-enabled=true"
-            - "--query-log-directory=/var/log/memgraph/session_trace"
-            - "--storage-mode=IN_MEMORY_TRANSACTIONAL"
-        healthcheck:
-            test:
-                [
-                    "CMD-SHELL",
-                    "echo 'RETURN 0;' | mgconsole --host localhost --port 7687 --username memgraph --password memgraph >/dev/null 2>&1 || exit 1",
-                ]
-            interval: 10s
-            timeout: 5s
-            retries: 5
-            start_period: 15s
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
+  memgraph:
+    image: memgraph/memgraph-mage:latest
+    container_name: openclaw-memgraph
+    ports:
+      - "7687:7687"
+      - "7444:7444"
+    volumes:
+      - mg_lib:/var/lib/memgraph
+      - mg_log:/var/log/memgraph
+      - ./docker/memgraph/init:/docker-entrypoint-initdb.d
+    environment:
+      MEMGRAPH_USER: memgraph
+      MEMGRAPH_PASSWORD: memgraph
+    command:
+      - "--log-level=INFO"
+      - "--schema-info-enabled=true"
+      - "--storage-enable-schema-metadata=true"
+      - "--audit-enabled=true"
+      - "--query-log-directory=/var/log/memgraph/session_trace"
+      - "--storage-mode=IN_MEMORY_TRANSACTIONAL"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "echo 'RETURN 0;' | mgconsole --host localhost --port 7687 --username memgraph --password memgraph >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
-    memgraph-lab:
-        image: memgraph/lab:latest
-        container_name: openclaw-memgraph-lab
-        depends_on:
-            memgraph:
-                condition: service_healthy
-        ports:
-            - "3000:3000"
-        environment:
-            # Configuration pour le quick-connect depuis le navigateur
-            # Le navigateur se connecte à host.docker.internal qui pointe vers l'hôte
-            QUICK_CONNECT_MG_HOST: host.docker.internal
-            QUICK_CONNECT_MG_PORT: "7687"
-            QUICK_CONNECT_MG_USERNAME: memgraph
-            QUICK_CONNECT_MG_PASSWORD: memgraph
-        extra_hosts:
-            - "host.docker.internal:host-gateway"
+  memgraph-lab:
+    image: memgraph/lab:latest
+    container_name: openclaw-memgraph-lab
+    depends_on:
+      memgraph:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      # Configuration pour le quick-connect depuis le navigateur
+      # Le navigateur se connecte à host.docker.internal qui pointe vers l'hôte
+      QUICK_CONNECT_MG_HOST: host.docker.internal
+      QUICK_CONNECT_MG_PORT: "7687"
+      QUICK_CONNECT_MG_USERNAME: memgraph
+      QUICK_CONNECT_MG_PASSWORD: memgraph
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
-    mg_lib:
-    mg_log:
+  mg_lib:
+  mg_log:

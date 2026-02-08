@@ -15,7 +15,7 @@ function isRetryableError(err: unknown): boolean {
   if (!err) {
     return false;
   }
-  const message = err instanceof Error ? err.message : String(err);
+  const message = err instanceof Error ? err.message : JSON.stringify(err);
   const lowered = message.toLowerCase();
   return (
     lowered.includes("connection") ||
@@ -35,7 +35,7 @@ function coerceInteger(value: Integer) {
 
 function normalizeValue(value: unknown): unknown {
   if (neo4j.isInt(value)) {
-    return coerceInteger(value as Integer);
+    return coerceInteger(value);
   }
   if (Array.isArray(value)) {
     return value.map((entry) => normalizeValue(entry));
@@ -190,10 +190,10 @@ export class MemgraphProvider implements KgmProvider {
       params: { scope: params.scope, query: params.query }, // Don't pass limit as param
     });
     return result.rows.map((row) => ({
-      key: String(row.key ?? ""),
-      label: String(row.label ?? ""),
+      key: typeof row.key === "string" ? row.key : JSON.stringify(row.key ?? ""),
+      label: typeof row.label === "string" ? row.label : JSON.stringify(row.label ?? ""),
       properties:
-        typeof row.properties === "object"
+        typeof row.properties === "object" && row.properties !== null
           ? (row.properties as Record<string, unknown>)
           : undefined,
     }));

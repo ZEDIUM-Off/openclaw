@@ -12,7 +12,7 @@ import { resolveGatewayAuth } from "../../gateway/auth.js";
 import { startGatewayServer } from "../../gateway/server.js";
 import { setGatewayWsLogStyle } from "../../gateway/ws-logging.js";
 import { setVerbose } from "../../globals.js";
-import { autoStartMemgraphIfNeeded, autoStopMemgraphIfNeeded } from "../../infra/docker-manager.js";
+import { autoStartMemgraphIfNeeded } from "../../infra/docker-manager.js";
 import { GatewayLockError } from "../../infra/gateway-lock.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../../infra/ports.js";
 import { setConsoleSubsystemFilter, setConsoleTimestampPrefix } from "../../logging/console.js";

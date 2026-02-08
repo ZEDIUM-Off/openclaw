@@ -77,7 +77,7 @@ export async function readAgentsFromKgm(params: {
     });
     const agents: GatewayAgentRow[] = result.rows
       .map((row) => ({
-        id: String(row.id ?? "").trim(),
+        id: (typeof row.id === "string" ? row.id : JSON.stringify(row.id ?? "")).trim(),
         name: typeof row.name === "string" ? row.name : undefined,
         identity:
           row.identity && typeof row.identity === "object"
@@ -119,20 +119,24 @@ export async function readNodesFromKgm(params: {
     });
     const nodes: NodeListEntry[] = result.rows
       .map((row) => ({
-        nodeId: String(row.nodeId ?? ""),
-        displayName: row.displayName ? String(row.displayName) : undefined,
-        platform: row.platform ? String(row.platform) : undefined,
-        version: row.version ? String(row.version) : undefined,
-        coreVersion: row.coreVersion ? String(row.coreVersion) : undefined,
-        uiVersion: row.uiVersion ? String(row.uiVersion) : undefined,
-        deviceFamily: row.deviceFamily ? String(row.deviceFamily) : undefined,
-        modelIdentifier: row.modelIdentifier ? String(row.modelIdentifier) : undefined,
-        remoteIp: row.remoteIp ? String(row.remoteIp) : undefined,
-        caps: Array.isArray(row.caps) ? row.caps.map(String) : undefined,
-        commands: Array.isArray(row.commands) ? row.commands.map(String) : undefined,
-        connectedAtMs: row.connectedAtMs ? Number(row.connectedAtMs) : undefined,
-        paired: row.paired ? Boolean(row.paired) : undefined,
-        connected: row.connected ? Boolean(row.connected) : undefined,
+        nodeId: typeof row.nodeId === "string" ? row.nodeId : JSON.stringify(row.nodeId ?? ""),
+        displayName: typeof row.displayName === "string" ? row.displayName : undefined,
+        platform: typeof row.platform === "string" ? row.platform : undefined,
+        version: typeof row.version === "string" ? row.version : undefined,
+        coreVersion: typeof row.coreVersion === "string" ? row.coreVersion : undefined,
+        uiVersion: typeof row.uiVersion === "string" ? row.uiVersion : undefined,
+        deviceFamily: typeof row.deviceFamily === "string" ? row.deviceFamily : undefined,
+        modelIdentifier: typeof row.modelIdentifier === "string" ? row.modelIdentifier : undefined,
+        remoteIp: typeof row.remoteIp === "string" ? row.remoteIp : undefined,
+        caps: Array.isArray(row.caps)
+          ? row.caps.map((c) => (typeof c === "string" ? c : JSON.stringify(c)))
+          : undefined,
+        commands: Array.isArray(row.commands)
+          ? row.commands.map((c) => (typeof c === "string" ? c : JSON.stringify(c)))
+          : undefined,
+        connectedAtMs: typeof row.connectedAtMs === "number" ? row.connectedAtMs : undefined,
+        paired: typeof row.paired === "boolean" ? row.paired : undefined,
+        connected: typeof row.connected === "boolean" ? row.connected : undefined,
       }))
       .filter((row) => row.nodeId);
     return nodes.length > 0 ? nodes : null;
@@ -348,12 +352,12 @@ export async function readAgentDocsFromKgm(params: {
 
     const docs: AgentDocEntry[] = result.rows
       .map((row) => ({
-        docType: String(row.docType ?? ""),
-        hash: String(row.hash ?? ""),
-        updatedAt: Number(row.updatedAt ?? 0),
-        sourcePath: row.sourcePath ? String(row.sourcePath) : undefined,
-        size: row.size ? Number(row.size) : undefined,
-        raw: row.raw ? String(row.raw) : undefined,
+        docType: typeof row.docType === "string" ? row.docType : JSON.stringify(row.docType ?? ""),
+        hash: typeof row.hash === "string" ? row.hash : JSON.stringify(row.hash ?? ""),
+        updatedAt: typeof row.updatedAt === "number" ? row.updatedAt : Number(row.updatedAt ?? 0),
+        sourcePath: typeof row.sourcePath === "string" ? row.sourcePath : undefined,
+        size: typeof row.size === "number" ? row.size : undefined,
+        raw: typeof row.raw === "string" ? row.raw : undefined,
       }))
       .filter((doc) => doc.docType && doc.hash);
 
@@ -435,8 +439,9 @@ export async function readAgentFileFromKgm(params: {
     }
 
     const row = result.rows[0];
-    const raw = row.raw ? String(row.raw) : "";
-    const updatedAt = Number(row.updatedAt ?? 0);
+    const raw = typeof row.raw === "string" ? row.raw : "";
+    const updatedAt =
+      typeof row.updatedAt === "number" ? row.updatedAt : Number(row.updatedAt ?? 0);
 
     if (!raw) {
       return null;

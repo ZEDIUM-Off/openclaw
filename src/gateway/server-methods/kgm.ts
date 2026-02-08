@@ -722,7 +722,11 @@ export const kgmHandlers: GatewayRequestHandlers = {
       params: { scope: safeScope, contextKey, limit: maxMessages },
     });
 
-    const messageKeys = messages.rows.map((row) => String(row.refKey ?? "")).filter(Boolean);
+    const messageKeys = messages.rows
+      .map((row) =>
+        typeof row.refKey === "string" ? row.refKey : JSON.stringify(row.refKey ?? ""),
+      )
+      .filter(Boolean);
     const messageDetails =
       messageKeys.length > 0
         ? await provider.query({
@@ -738,7 +742,11 @@ export const kgmHandlers: GatewayRequestHandlers = {
         : { rows: [] };
 
     const lines = ["## KGM Context"];
-    const nodeKeys = nodes.rows.map((row) => String(row.refKey ?? "")).filter(Boolean);
+    const nodeKeys = nodes.rows
+      .map((row) =>
+        typeof row.refKey === "string" ? row.refKey : JSON.stringify(row.refKey ?? ""),
+      )
+      .filter(Boolean);
     const sessionStoreCache = new Map<string, Record<string, SessionEntry>>();
     const messageMap = new Map<
       string,
@@ -752,7 +760,7 @@ export const kgmHandlers: GatewayRequestHandlers = {
       }
     >();
     for (const row of messageDetails.rows) {
-      const key = String(row.key ?? "");
+      const key = typeof row.key === "string" ? row.key : JSON.stringify(row.key ?? "");
       if (!key) {
         continue;
       }

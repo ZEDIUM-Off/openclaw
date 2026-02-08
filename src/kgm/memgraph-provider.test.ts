@@ -1,15 +1,31 @@
-import { describe, expect, it, vi } from "vitest";
-import { MemgraphProvider } from "./memgraph-provider.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock neo4j driver
-const mockRun = vi.fn();
-const mockSession = vi.fn(() => ({ run: mockRun, close: vi.fn() }));
-const mockDriver = vi.fn(() => ({ session: mockSession, close: vi.fn() }));
+// Mock must be defined before imports (hoisted by Vitest)
+const mockFns = {
+  run: vi.fn(),
+  session: vi.fn(),
+  driver: vi.fn(),
+};
 
 vi.mock("neo4j-driver", () => ({
   default: {
-    driver: mockDriver,
+    driver: (...args: unknown[]) => {
+      mockFns.driver(...args);
+      return {
+        session: () => {
+          mockFns.session();
+          return {
+            run: mockFns.run,
+            close: vi.fn(),
+          };
+        },
+        close: vi.fn(),
+      };
+    },
     auth: { basic: vi.fn(() => "auth-token") },
+    session: { WRITE: "write", READ: "read" },
+    isInt: (value: unknown) =>
+      value instanceof Object && value !== null && typeof value === "object" && "toNumber" in value,
     types: {
       Record: class Record {
         constructor(private data: Record<string, unknown>) {}
@@ -24,20 +40,28 @@ vi.mock("neo4j-driver", () => ({
   },
 }));
 
+import { MemgraphProvider } from "./memgraph-provider.js";
+
 describe("MemgraphProvider", () => {
   const createProvider = () =>
     new MemgraphProvider({
-      url: "bolt://localhost:7687",
-      user: "memgraph",
-      password: "memgraph",
+      config: {
+        url: "bolt://localhost:7687",
+        user: "memgraph",
+        password: "memgraph",
+      },
     });
 
   const actor = { role: "system" as const };
 
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe("search", () => {
     it("should search with default limit of 20", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -47,14 +71,14 @@ describe("MemgraphProvider", () => {
         query: "test",
       });
 
-      const call = mockRun.mock.calls[0];
+      const call = mockFns.run.mock.calls[0];
       expect(call[0]).toContain("LIMIT 20");
       expect(call[0]).not.toContain("LIMIT $");
     });
 
     it("should use provided limit as integer literal", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -65,14 +89,14 @@ describe("MemgraphProvider", () => {
         limit: 50,
       });
 
-      const call = mockRun.mock.calls[0];
+      const call = mockFns.run.mock.calls[0];
       expect(call[0]).toContain("LIMIT 50");
       expect(call[0]).not.toContain("LIMIT $");
     });
 
     it("should floor float limit to integer", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -80,17 +104,17 @@ describe("MemgraphProvider", () => {
         actor,
         scope: "agent:test",
         query: "test",
-        limit: 10.7, // Float value
+        limit: 10.7,
       });
 
-      const call = mockRun.mock.calls[0];
-      expect(call[0]).toContain("LIMIT 10"); // Should be floored
+      const call = mockFns.run.mock.calls[0];
+      expect(call[0]).toContain("LIMIT 10");
       expect(call[0]).not.toContain("LIMIT $");
     });
 
     it("should ensure minimum limit of 1", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -98,16 +122,16 @@ describe("MemgraphProvider", () => {
         actor,
         scope: "agent:test",
         query: "test",
-        limit: 0, // Below minimum
+        limit: 0,
       });
 
-      const call = mockRun.mock.calls[0];
+      const call = mockFns.run.mock.calls[0];
       expect(call[0]).toContain("LIMIT 1");
     });
 
     it("should handle negative limit by using default", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -118,13 +142,13 @@ describe("MemgraphProvider", () => {
         limit: -5,
       });
 
-      const call = mockRun.mock.calls[0];
-      expect(call[0]).toContain("LIMIT 1"); // Math.max(1, ...) ensures minimum
+      const call = mockFns.run.mock.calls[0];
+      expect(call[0]).toContain("LIMIT 1");
     });
 
     it("should pass scope and query as parameters", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -135,18 +159,17 @@ describe("MemgraphProvider", () => {
         limit: 5,
       });
 
-      const call = mockRun.mock.calls[0];
+      const call = mockFns.run.mock.calls[0];
       expect(call[1]).toMatchObject({
         scope: "agent:main",
         query: "test-query",
       });
-      // Limit should NOT be in parameters
       expect(call[1]).not.toHaveProperty("limit");
     });
 
     it("should handle search results correctly", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [
           {
             get: (key: string) => {
@@ -181,7 +204,7 @@ describe("MemgraphProvider", () => {
 
     it("should use IS NOT NULL instead of exists() for Memgraph compatibility", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({
+      mockFns.run.mockResolvedValueOnce({
         records: [],
       });
 
@@ -191,7 +214,7 @@ describe("MemgraphProvider", () => {
         query: "test",
       });
 
-      const cypher = mockRun.mock.calls[0][0];
+      const cypher = mockFns.run.mock.calls[0][0];
       expect(cypher).toContain("n.label IS NOT NULL");
       expect(cypher).not.toContain("exists(n.label)");
     });
@@ -200,7 +223,7 @@ describe("MemgraphProvider", () => {
   describe("query building", () => {
     it("should embed limit directly in cypher string, not as parameter", async () => {
       const provider = createProvider();
-      mockRun.mockResolvedValueOnce({ records: [] });
+      mockFns.run.mockResolvedValueOnce({ records: [] });
 
       await provider.search({
         actor,
@@ -209,12 +232,10 @@ describe("MemgraphProvider", () => {
         limit: 42,
       });
 
-      const cypher = mockRun.mock.calls[0][0];
-      const params = mockRun.mock.calls[0][1];
+      const cypher = mockFns.run.mock.calls[0][0];
+      const params = mockFns.run.mock.calls[0][1];
 
-      // LIMIT should be embedded in the query string
       expect(cypher).toMatch(/LIMIT 42$/);
-      // And NOT be in parameters
       expect(params).not.toHaveProperty("limit");
     });
   });

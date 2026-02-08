@@ -120,14 +120,12 @@ describe("kgm-config-store", () => {
     vi.mocked(provider.query).mockResolvedValue({
       rows: [
         {
-          node: {
-            id: "node-1",
-            displayName: "Node",
-            platform: "linux",
-            connected: true,
-            caps: ["a"],
-            commands: ["b"],
-          },
+          nodeId: "node-1",
+          displayName: "Node",
+          platform: "linux",
+          connected: true,
+          caps: ["a"],
+          commands: ["b"],
         },
       ],
     });
